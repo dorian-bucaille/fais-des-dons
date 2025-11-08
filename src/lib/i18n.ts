@@ -26,6 +26,12 @@ const resources: Resource = {
         disclaimer: "Calculateur pédagogique — aucune donnée n'est transmise.",
         github: "GitHub",
       },
+      appearance: {
+        toggleTitle: "Changer le mode d'affichage",
+        toggleAria: "Basculer vers le {{mode}}",
+        lightMode: "Mode clair",
+        darkMode: "Mode sombre",
+      },
       actions: {
         copyLink: "Copier le lien",
         copyLinkSuccess: "Lien copié dans le presse-papiers.",
@@ -195,6 +201,12 @@ const resources: Resource = {
           "Estimate the optimal donation and your tax savings by applying the French 75 % / 66 % rules and the 20 % income cap.",
         disclaimer: "Educational tool — no data is sent anywhere.",
         github: "GitHub",
+      },
+      appearance: {
+        toggleTitle: "Switch appearance mode",
+        toggleAria: "Toggle to {{mode}}",
+        lightMode: "Light mode",
+        darkMode: "Dark mode",
       },
       actions: {
         copyLink: "Copy link",

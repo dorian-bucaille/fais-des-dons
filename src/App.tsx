@@ -9,6 +9,7 @@ import { calculate } from "./lib/calc";
 import { loadState, saveState } from "./lib/storage";
 import type { Inputs, ObjectiveInput, ObjectiveType } from "./lib/types";
 import { useCollapse } from "./hooks/useCollapse";
+import { useTheme } from "./hooks/useTheme";
 import "./styles.css";
 
 const DEFAULTS: Inputs = {
@@ -206,6 +207,7 @@ export default function App() {
     const stored = loadState(DEFAULTS);
     return parseQuery(stored);
   });
+  const { isDark, toggle: toggleTheme } = useTheme();
   const [copied, setCopied] = useState<string | null>(null);
   const detailsRef = useRef<DetailsCardHandle>(null);
   const expertRef = useCollapse(inputs.expertMode);
@@ -277,6 +279,15 @@ export default function App() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={toggleTheme}
+                title={t("appearance.toggleTitle")}
+                aria-label={t("appearance.toggleAria", { mode: isDark ? t("appearance.lightMode") : t("appearance.darkMode") })}
+              >
+                {isDark ? t("appearance.lightMode") : t("appearance.darkMode")}
+              </button>
               <button
                 type="button"
                 className="btn btn-ghost"
