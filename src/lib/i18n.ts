@@ -55,19 +55,44 @@ const resources: Resource = {
         incomeHelper: "Il apparaît sur ton avis d'imposition, rubrique \"revenu imposable\".",
         emptyState:
           "Saisis ton revenu imposable pour découvrir des idées de dons et l'économie d'impôt associée.",
+        toggle: {
+          monthly: "Par mois",
+          once: "En une fois",
+        },
+        slider: {
+          monthly: {
+            label: "Je donne chaque mois",
+            value: "{{amount}} / mois",
+            helper:
+              "Déplace le curseur pour ajuster ton don mensuel. Par défaut, il remplit le plafond pour maximiser ta réduction d'impôt.",
+          },
+          once: {
+            label: "Je donne en une fois",
+            value: "{{amount}}",
+            helper:
+              "Déplace le curseur pour ajuster ton don ponctuel. Par défaut, il remplit le plafond pour maximiser ta réduction d'impôt.",
+          },
+        },
+        highlight: {
+          title: "Ce que ça te coûte vraiment",
+          monthly: "{{amount}} / mois",
+          once: "{{amount}}",
+          monthlyDetail:
+            "Tu donnes {{donation}} / mois ({{donationAnnual}} par an) et l'État t'en rend {{reduction}} / mois ({{reductionAnnual}} par an).",
+          onceDetail:
+            "Tu donnes {{donation}} et l'État t'en rend {{reduction}} sur tes impôts : ton coût réel est de {{amount}}.",
+        },
         cards: {
           monthly: {
-            title: "Si tu donnes chaque mois",
+            title: "Tu donnes chaque mois",
             amount: "{{amount}} / mois",
-            detail: "Soit {{annual}} par an.",
             subAmount: "≈ {{amount}} / mois récupérés",
             realCostPerMonth: "Coût réel : {{amount}} / mois",
             explanation:
               "Tu verses {{donationMonthly}} par mois ({{donation}} par an). L'État te rend {{reductionMonthly}} par mois, soit {{reduction}} sur l'année. Au final, ton don ne te coûte que {{costMonthly}} par mois ({{cost}} sur l'année).",
           },
           once: {
-            title: "Si tu donnes en une fois",
-            detail: "Un don ponctuel de {{amount}}.",
+            title: "Tu donnes en une fois",
             explanation:
               "Tu donnes {{donation}} en une fois. L'État te rend {{reduction}} sur tes impôts, donc il ne sort réellement que {{cost}} de ta poche.",
           },
@@ -273,19 +298,44 @@ const resources: Resource = {
         incomeHelper: "You will find it on your French tax notice under “revenu imposable”.",
         emptyState:
           "Fill in your taxable income to discover donation ideas and the matching tax reduction.",
+        toggle: {
+          monthly: "Monthly",
+          once: "One-off",
+        },
+        slider: {
+          monthly: {
+            label: "I give every month",
+            value: "{{amount}} / month",
+            helper:
+              "Drag the slider to adjust your monthly gift. By default it fills the cap to maximise your tax reduction.",
+          },
+          once: {
+            label: "I give once",
+            value: "{{amount}}",
+            helper:
+              "Drag the slider to adjust your one-off gift. By default it fills the cap to maximise your tax reduction.",
+          },
+        },
+        highlight: {
+          title: "What it really costs you",
+          monthly: "{{amount}} / month",
+          once: "{{amount}}",
+          monthlyDetail:
+            "You give {{donation}} / month ({{donationAnnual}} yearly) and the state gives you back {{reduction}} / month ({{reductionAnnual}} yearly).",
+          onceDetail:
+            "You give {{donation}} and the state refunds {{reduction}} on your taxes — your real cost is {{amount}}.",
+        },
         cards: {
           monthly: {
-            title: "If you donate every month",
+            title: "You give every month",
             amount: "{{amount}} / month",
-            detail: "Which is {{annual}} per year.",
             subAmount: "≈ {{amount}} returned each month",
             realCostPerMonth: "Real cost: {{amount}} / month",
             explanation:
               "You give {{donationMonthly}} per month ({{donation}} per year). The State gives you back {{reductionMonthly}} per month, i.e. {{reduction}} per year. In the end it really costs {{costMonthly}} per month ({{cost}} per year).",
           },
           once: {
-            title: "If you donate once",
-            detail: "A one-off donation of {{amount}}.",
+            title: "You give once",
             explanation:
               "You donate {{donation}} in one go. The State gives you back {{reduction}}, so the real cost is only {{cost}}.",
           },
