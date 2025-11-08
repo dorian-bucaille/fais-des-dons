@@ -5,24 +5,16 @@ import { SummaryCard } from "./components/SummaryCard";
 import { DetailsCard, type DetailsCardHandle } from "./components/DetailsCard";
 import { CalculationInfoCard } from "./components/CalculationInfoCard";
 import { GlossaryButton } from "./components/GlossaryButton";
+import { SimpleMode } from "./components/SimpleMode";
 import { calculate } from "./lib/calc";
 import { loadState, saveState } from "./lib/storage";
 import type { Inputs, ObjectiveInput, ObjectiveType } from "./lib/types";
 import { useCollapse } from "./hooks/useCollapse";
 import { useTheme } from "./hooks/useTheme";
+import { DEFAULT_INPUTS } from "./lib/defaults";
 import "./styles.css";
 
-const DEFAULTS: Inputs = {
-  year: 2025,
-  taxableIncome: 0,
-  frequency: "once",
-  objective: { type: "max_advantage" },
-  expertMode: false,
-  trFaceValue: 8.5,
-  trQuantity: 0,
-  trEmployerRate: 60,
-  trEmployeeRate: 40,
-};
+const VIEW_MODE_STORAGE_KEY = "fdd:view-mode";
 
 const sanitizeNumber = (value: string | null, fallback: number) => {
   if (!value) return fallback;
@@ -204,10 +196,15 @@ export default function App() {
   const { t, i18n } = useTranslation();
   const locale = i18n.language.startsWith("fr") ? "fr-FR" : "en-GB";
   const [inputs, setInputs] = useState<Inputs>(() => {
-    const stored = loadState(DEFAULTS);
+    const stored = loadState(DEFAULT_INPUTS);
     return parseQuery(stored);
   });
   const { isDark, toggle: toggleTheme } = useTheme();
+  const [viewMode, setViewMode] = useState<"simple" | "advanced">(() => {
+    if (typeof window === "undefined") return "simple";
+    const stored = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+    return stored === "advanced" ? "advanced" : "simple";
+  });
   const [copied, setCopied] = useState<string | null>(null);
   const detailsRef = useRef<DetailsCardHandle>(null);
   const expertRef = useCollapse(inputs.expertMode);
@@ -215,6 +212,15 @@ export default function App() {
   useEffect(() => {
     saveState(inputs);
   }, [inputs]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode);
+    } catch {
+      /* noop */
+    }
+  }, [viewMode]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -264,256 +270,288 @@ export default function App() {
 
   const handleExportCsv = () => downloadCsv(inputs, locale);
 
-  const reset = () => setInputs({ ...DEFAULTS });
+  const reset = () => setInputs({ ...DEFAULT_INPUTS });
 
   return (
     <div className="pb-12">
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
         <header className="flex flex-col gap-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="space-y-2">
               <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{t("header.title")}</h1>
-              <p className="max-w-2xl text-sm text-gray-600 dark:text-gray-300">{t("header.description")}</p>
+              <p className="max-w-2xl text-sm text-gray-600 dark:text-gray-300">
+                {t(viewMode === "simple" ? "header.simpleDescription" : "header.description")}
+              </p>
               <div className="flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
                 <span>{t("header.disclaimer")}</span>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={toggleTheme}
-                title={t("appearance.toggleTitle")}
-                aria-label={t("appearance.toggleAria", { mode: isDark ? t("appearance.lightMode") : t("appearance.darkMode") })}
-              >
-                {isDark ? t("appearance.lightMode") : t("appearance.darkMode")}
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => i18n.changeLanguage(i18n.language.startsWith("fr") ? "en" : "fr")}
-              >
-                {t("languages.switch")}
-              </button>
-              <GlossaryButton />
+            <div className="flex flex-col items-stretch gap-3 sm:items-end">
+              <div className="flex items-center gap-2 self-start sm:self-end">
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={toggleTheme}
+                  title={t("appearance.toggleTitle")}
+                  aria-label={t("appearance.toggleAria", { mode: isDark ? t("appearance.lightMode") : t("appearance.darkMode") })}
+                >
+                  {isDark ? t("appearance.lightMode") : t("appearance.darkMode")}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => i18n.changeLanguage(i18n.language.startsWith("fr") ? "en" : "fr")}
+                >
+                  {t("languages.switch")}
+                </button>
+                <GlossaryButton />
+              </div>
+              <div className="flex gap-2 self-start sm:self-end">
+                <button
+                  type="button"
+                  className={`btn btn-ghost ${viewMode === "simple" ? "ring-2 ring-emerald-400/60" : ""}`}
+                  onClick={() => setViewMode("simple")}
+                >
+                  {t("header.simpleMode")}
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-ghost ${viewMode === "advanced" ? "ring-2 ring-indigo-400/60" : ""}`}
+                  onClick={() => setViewMode("advanced")}
+                >
+                  {t("header.advancedMode")}
+                </button>
+              </div>
             </div>
           </div>
-          <div className="flex flex-wrap gap-3 text-sm text-gray-500 dark:text-gray-400">
-            <button type="button" className="btn btn-primary no-print" onClick={handleCopyLink}>
-              {t("actions.copyLink")}
-            </button>
-            <button type="button" className="btn btn-ghost no-print" onClick={handleCopySummary}>
-              {t("actions.copySummary")}
-            </button>
-            <button type="button" className="btn btn-ghost no-print" onClick={handleExportCsv}>
-              {t("actions.exportCsv")}
-            </button>
-            <button type="button" className="btn btn-ghost no-print" onClick={() => window.print()}>
-              {t("actions.print")}
-            </button>
-            <button type="button" className="btn btn-ghost no-print" onClick={reset}>
-              {t("actions.reset")}
-            </button>
-          </div>
+          {viewMode === "advanced" ? (
+            <div className="flex flex-wrap gap-3 text-sm text-gray-500 dark:text-gray-400">
+              <button type="button" className="btn btn-primary no-print" onClick={handleCopyLink}>
+                {t("actions.copyLink")}
+              </button>
+              <button type="button" className="btn btn-ghost no-print" onClick={handleCopySummary}>
+                {t("actions.copySummary")}
+              </button>
+              <button type="button" className="btn btn-ghost no-print" onClick={handleExportCsv}>
+                {t("actions.exportCsv")}
+              </button>
+              <button type="button" className="btn btn-ghost no-print" onClick={() => window.print()}>
+                {t("actions.print")}
+              </button>
+              <button type="button" className="btn btn-ghost no-print" onClick={reset}>
+                {t("actions.reset")}
+              </button>
+            </div>
+          ) : null}
           {copied ? <div className="text-sm font-medium text-emerald-600 dark:text-emerald-300">{copied}</div> : null}
         </header>
 
-        <section className="card space-y-6" id="parameters">
-          <header className="space-y-1">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t("parameters.title")}</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">{t("parameters.description")}</p>
-          </header>
+        {viewMode === "simple" ? (
+          <SimpleMode
+            inputs={inputs}
+            onIncomeChange={(income) => setInputs((prev) => ({ ...prev, taxableIncome: Math.max(0, income) }))}
+            onSwitchAdvanced={() => setViewMode("advanced")}
+          />
+        ) : (
+          <>
+            <section className="card space-y-6" id="parameters">
+              <header className="space-y-1">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t("parameters.title")}</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{t("parameters.description")}</p>
+              </header>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <InputField
-              id="year"
-              label={t("parameters.year")}
-              value={inputs.year}
-              onChange={(value) => setInputs((prev) => ({ ...prev, year: Math.round(value) || prev.year }))}
-              min={2005}
-              max={2100}
-            />
-            <InputField
-              id="income"
-              label={t("parameters.income")}
-              value={inputs.taxableIncome}
-              onChange={(value) => setInputs((prev) => ({ ...prev, taxableIncome: Math.max(0, value) }))}
-              min={0}
-              step={100}
-              suffix="€"
-            />
-            <div className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{t("parameters.frequency.title")}</span>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  className={`btn btn-ghost flex-1 ${inputs.frequency === "once" ? "ring-2 ring-rose-400/60" : ""}`}
-                  onClick={() => setInputs((prev) => ({ ...prev, frequency: "once" }))}
-                >
-                  {t("parameters.frequency.once")}
-                </button>
-                <button
-                  type="button"
-                  className={`btn btn-ghost flex-1 ${inputs.frequency === "monthly" ? "ring-2 ring-rose-400/60" : ""}`}
-                  onClick={() => setInputs((prev) => ({ ...prev, frequency: "monthly" }))}
-                >
-                  {t("parameters.frequency.monthly")}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid gap-3 lg:grid-cols-3">
-            {([
-              {
-                type: "max_advantage" as ObjectiveType,
-                title: t("parameters.objectives.max.title"),
-                description: t("parameters.objectives.max.description"),
-              },
-              {
-                type: "donation_target" as ObjectiveType,
-                title: t("parameters.objectives.brut.title"),
-                description: t("parameters.objectives.brut.description"),
-              },
-              {
-                type: "net_cost_target" as ObjectiveType,
-                title: t("parameters.objectives.net.title"),
-                description: t("parameters.objectives.net.description"),
-              },
-            ] satisfies Array<{ type: ObjectiveType; title: string; description: string }>).map((option) => (
-              <label key={option.type} className="mode-option">
-                <input
-                  type="radio"
-                  name="objective"
-                  className="mode-option__input"
-                  checked={inputs.objective.type === option.type}
-                  onChange={() => handleObjectiveChange(option.type)}
-                />
-                <div className="mode-option__content">
-                  <span className="mode-option__title">{option.title}</span>
-                  <span className="mode-option__description">{option.description}</span>
-                  {option.type === "donation_target" && inputs.objective.type === "donation_target" ? (
-                    <div className="mt-2">
-                      <InputField
-                        id="donation-amount"
-                        label={t("parameters.objectives.brut.amount", {
-                          label: inputs.frequency === "monthly" ? t("parameters.frequency.monthly") : t("parameters.frequency.once"),
-                        })}
-                        value={inputs.objective.amount}
-                        onChange={(value) =>
-                          setInputs((prev) => ({
-                            ...prev,
-                            objective: { type: "donation_target", amount: Math.max(0, value) },
-                          }))
-                        }
-                        min={0}
-                        suffix="€"
-                      />
-                    </div>
-                  ) : null}
-                  {option.type === "net_cost_target" && inputs.objective.type === "net_cost_target" ? (
-                    <div className="mt-2">
-                      <InputField
-                        id="net-cost"
-                        label={t("parameters.objectives.net.amount", {
-                          label: inputs.frequency === "monthly" ? t("parameters.frequency.monthly") : t("parameters.frequency.once"),
-                        })}
-                        value={inputs.objective.cost}
-                        onChange={(value) =>
-                          setInputs((prev) => ({
-                            ...prev,
-                            objective: { type: "net_cost_target", cost: Math.max(0, value) },
-                          }))
-                        }
-                        min={0}
-                        suffix="€"
-                      />
-                    </div>
-                  ) : null}
-                </div>
-              </label>
-            ))}
-          </div>
-
-          <div className="rounded-2xl border border-indigo-200/70 bg-indigo-50/70 p-4 shadow-sm dark:border-indigo-500/40 dark:bg-indigo-500/10">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-semibold text-indigo-800 dark:text-indigo-200">{t("parameters.expert.title")}</h3>
-                <p className="text-xs text-indigo-900/70 dark:text-indigo-100/80">{t("parameters.expert.description")}</p>
-              </div>
-              <button
-                type="button"
-                className={`btn btn-ghost ${inputs.expertMode ? "ring-2 ring-indigo-500/60" : ""}`}
-                onClick={() => setInputs((prev) => ({ ...prev, expertMode: !prev.expertMode }))}
-                aria-expanded={inputs.expertMode}
-              >
-                {inputs.expertMode ? t("parameters.expert.disable") : t("parameters.expert.enable")}
-              </button>
-            </div>
-            <div
-              ref={expertRef}
-              className="mt-4 grid gap-3 overflow-hidden text-sm"
-              style={{ maxHeight: "0px", opacity: 0, transform: "translateY(-0.5rem)" }}
-            >
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <InputField
-                  id="tr-face"
-                  label={t("parameters.expert.faceValue")}
-                  value={inputs.trFaceValue}
-                  onChange={(value) => setInputs((prev) => ({ ...prev, trFaceValue: Math.max(0, value) }))}
+                  id="year"
+                  label={t("parameters.year")}
+                  value={inputs.year}
+                  onChange={(value) => setInputs((prev) => ({ ...prev, year: Math.round(value) || prev.year }))}
+                  min={2005}
+                  max={2100}
+                />
+                <InputField
+                  id="income"
+                  label={t("parameters.income")}
+                  value={inputs.taxableIncome}
+                  onChange={(value) => setInputs((prev) => ({ ...prev, taxableIncome: Math.max(0, value) }))}
                   min={0}
-                  step={0.1}
+                  step={100}
                   suffix="€"
                 />
-                <InputField
-                  id="tr-quantity"
-                  label={t("parameters.expert.quantity")}
-                  value={inputs.trQuantity}
-                  onChange={(value) => setInputs((prev) => ({ ...prev, trQuantity: Math.max(0, value) }))}
-                  min={0}
-                  step={1}
-                />
-                <InputField
-                  id="tr-employer"
-                  label={t("parameters.expert.employerRate")}
-                  value={inputs.trEmployerRate}
-                  onChange={(value) => setInputs((prev) => ({ ...prev, trEmployerRate: Math.max(0, value) }))}
-                  min={0}
-                  max={100}
-                  step={1}
-                  suffix="%"
-                />
-                <InputField
-                  id="tr-employee"
-                  label={t("parameters.expert.employeeRate")}
-                  value={inputs.trEmployeeRate}
-                  onChange={(value) => setInputs((prev) => ({ ...prev, trEmployeeRate: Math.max(0, value) }))}
-                  min={0}
-                  max={100}
-                  step={1}
-                  suffix="%"
-                />
+                <div className="flex flex-col gap-2">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{t("parameters.frequency.title")}</span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className={`btn btn-ghost flex-1 ${inputs.frequency === "once" ? "ring-2 ring-rose-400/60" : ""}`}
+                      onClick={() => setInputs((prev) => ({ ...prev, frequency: "once" }))}
+                    >
+                      {t("parameters.frequency.once")}
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn btn-ghost flex-1 ${inputs.frequency === "monthly" ? "ring-2 ring-rose-400/60" : ""}`}
+                      onClick={() => setInputs((prev) => ({ ...prev, frequency: "monthly" }))}
+                    >
+                      {t("parameters.frequency.monthly")}
+                    </button>
+                  </div>
+                </div>
               </div>
-              <p className="text-xs text-indigo-900/70 dark:text-indigo-100/80">
-                {t("parameters.expert.helper")}
-              </p>
-            </div>
-          </div>
-        </section>
 
-        <div className="grid gap-6 lg:grid-cols-[2fr,1fr]">
-          <SummaryCard result={result} />
-          <div className="flex flex-col gap-6">
-            <CalculationInfoCard onRequestDetails={() => detailsRef.current?.openAndFocus()} />
-            <section className="card space-y-3 text-sm text-gray-600 dark:text-gray-300">
-              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t("context.title")}</h2>
-              <p>{t("context.pas")}</p>
-              <p>{t("context.report")}</p>
+              <div className="grid gap-3 lg:grid-cols-3">
+                {([
+                  {
+                    type: "max_advantage" as ObjectiveType,
+                    title: t("parameters.objectives.max.title"),
+                    description: t("parameters.objectives.max.description"),
+                  },
+                  {
+                    type: "donation_target" as ObjectiveType,
+                    title: t("parameters.objectives.brut.title"),
+                    description: t("parameters.objectives.brut.description"),
+                  },
+                  {
+                    type: "net_cost_target" as ObjectiveType,
+                    title: t("parameters.objectives.net.title"),
+                    description: t("parameters.objectives.net.description"),
+                  },
+                ] satisfies Array<{ type: ObjectiveType; title: string; description: string }>).map((option) => (
+                  <label key={option.type} className="mode-option">
+                    <input
+                      type="radio"
+                      name="objective"
+                      className="mode-option__input"
+                      checked={inputs.objective.type === option.type}
+                      onChange={() => handleObjectiveChange(option.type)}
+                    />
+                    <div className="mode-option__content">
+                      <span className="mode-option__title">{option.title}</span>
+                      <span className="mode-option__description">{option.description}</span>
+                      {option.type === "donation_target" && inputs.objective.type === "donation_target" ? (
+                        <div className="mt-2">
+                          <InputField
+                            id="donation-amount"
+                            label={t("parameters.objectives.brut.amount", {
+                              label: inputs.frequency === "monthly" ? t("parameters.frequency.monthly") : t("parameters.frequency.once"),
+                            })}
+                            value={inputs.objective.amount}
+                            onChange={(value) =>
+                              setInputs((prev) => ({
+                                ...prev,
+                                objective: { type: "donation_target", amount: Math.max(0, value) },
+                              }))
+                            }
+                            min={0}
+                            suffix="€"
+                          />
+                        </div>
+                      ) : null}
+                      {option.type === "net_cost_target" && inputs.objective.type === "net_cost_target" ? (
+                        <div className="mt-2">
+                          <InputField
+                            id="net-cost"
+                            label={t("parameters.objectives.net.amount", {
+                              label: inputs.frequency === "monthly" ? t("parameters.frequency.monthly") : t("parameters.frequency.once"),
+                            })}
+                            value={inputs.objective.cost}
+                            onChange={(value) =>
+                              setInputs((prev) => ({
+                                ...prev,
+                                objective: { type: "net_cost_target", cost: Math.max(0, value) },
+                              }))
+                            }
+                            min={0}
+                            suffix="€"
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  </label>
+                ))}
+              </div>
+
+              <div className="rounded-2xl border border-indigo-200/70 bg-indigo-50/70 p-4 shadow-sm dark:border-indigo-500/40 dark:bg-indigo-500/10">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-indigo-800 dark:text-indigo-200">{t("parameters.expert.title")}</h3>
+                    <p className="text-xs text-indigo-900/70 dark:text-indigo-100/80">{t("parameters.expert.description")}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className={`btn btn-ghost ${inputs.expertMode ? "ring-2 ring-indigo-500/60" : ""}`}
+                    onClick={() => setInputs((prev) => ({ ...prev, expertMode: !prev.expertMode }))}
+                    aria-expanded={inputs.expertMode}
+                  >
+                    {inputs.expertMode ? t("parameters.expert.disable") : t("parameters.expert.enable")}
+                  </button>
+                </div>
+                <div
+                  ref={expertRef}
+                  className="mt-4 grid gap-3 overflow-hidden text-sm"
+                  style={{ maxHeight: "0px", opacity: 0, transform: "translateY(-0.5rem)" }}
+                >
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <InputField
+                      id="tr-face"
+                      label={t("parameters.expert.faceValue")}
+                      value={inputs.trFaceValue}
+                      onChange={(value) => setInputs((prev) => ({ ...prev, trFaceValue: Math.max(0, value) }))}
+                      min={0}
+                      step={0.1}
+                      suffix="€"
+                    />
+                    <InputField
+                      id="tr-quantity"
+                      label={t("parameters.expert.quantity")}
+                      value={inputs.trQuantity}
+                      onChange={(value) => setInputs((prev) => ({ ...prev, trQuantity: Math.max(0, value) }))}
+                      min={0}
+                      step={1}
+                    />
+                    <InputField
+                      id="tr-employer"
+                      label={t("parameters.expert.employerRate")}
+                      value={inputs.trEmployerRate}
+                      onChange={(value) => setInputs((prev) => ({ ...prev, trEmployerRate: Math.max(0, value) }))}
+                      min={0}
+                      max={100}
+                      step={1}
+                      suffix="%"
+                    />
+                    <InputField
+                      id="tr-employee"
+                      label={t("parameters.expert.employeeRate")}
+                      value={inputs.trEmployeeRate}
+                      onChange={(value) => setInputs((prev) => ({ ...prev, trEmployeeRate: Math.max(0, value) }))}
+                      min={0}
+                      max={100}
+                      step={1}
+                      suffix="%"
+                    />
+                  </div>
+                  <p className="text-xs text-indigo-900/70 dark:text-indigo-100/80">
+                    {t("parameters.expert.helper")}
+                  </p>
+                </div>
+              </div>
             </section>
-          </div>
-        </div>
 
-        <DetailsCard ref={detailsRef} result={result} />
+            <div className="grid gap-6 lg:grid-cols-[2fr,1fr]">
+              <SummaryCard result={result} />
+              <div className="flex flex-col gap-6">
+                <CalculationInfoCard onRequestDetails={() => detailsRef.current?.openAndFocus()} />
+                <section className="card space-y-3 text-sm text-gray-600 dark:text-gray-300">
+                  <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t("context.title")}</h2>
+                  <p>{t("context.pas")}</p>
+                  <p>{t("context.report")}</p>
+                </section>
+              </div>
+            </div>
+
+            <DetailsCard ref={detailsRef} result={result} />
+          </>
+        )}
       </div>
     </div>
   );
