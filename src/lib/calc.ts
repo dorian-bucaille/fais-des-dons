@@ -1,376 +1,301 @@
-import { clamp /*, round2 */ } from "./format"; // ⟵ on n'utilise plus round2 ici
-import i18n from "./i18n";
-import type { Inputs, Result, SplitMode } from "./types";
+import { round2 } from "./format";
+import type {
+  CalculationDetails,
+  CalculationObjectiveState,
+  Inputs,
+  ObjectiveInput,
+  Result,
+  TaxConfig,
+} from "./types";
 
-// Arrondi sûr à 2 décimales (toujours un number, jamais NaN)
-const r2 = (n: unknown): number => {
-  const x = typeof n === "number" && Number.isFinite(n) ? n : 0;
-  return Math.round(x * 100) / 100;
+export const TAX_CONFIGS: TaxConfig[] = [
+  {
+    year: 2025,
+    cap75Euros: 1000,
+    cap20Rate: 0.2,
+    rate75: 0.75,
+    rate66: 0.66,
+  },
+];
+
+export function getTaxConfig(year: number): TaxConfig {
+  return TAX_CONFIGS.find((config) => config.year === year) ?? TAX_CONFIGS[0];
+}
+
+type Sanitized = Inputs & {
+  objective: ObjectiveInput;
 };
 
-export function calculate(inputs: Inputs): Result {
-  const toFinite = (value: unknown, fallback = 0) =>
-    typeof value === "number" && Number.isFinite(value) ? value : fallback;
+const clampNumber = (value: number, min = 0, max = Number.POSITIVE_INFINITY) => {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, value));
+};
 
-  const a1 = toFinite(inputs.a1);
-  const a2 = toFinite(inputs.a2);
-  const b2 = toFinite(inputs.b2);
-  const trPct = toFinite(inputs.trPct, 100);
-  const b = toFinite(inputs.b);
-  const m = toFinite(inputs.m);
-  const advanced = Boolean(inputs.advanced);
-  const E = toFinite(inputs.E);
-  const requestedMode = inputs.mode as SplitMode | undefined;
-  const mode: SplitMode = requestedMode === "equal_leftover" ? "equal_leftover" : "proportional";
-  const biasPtsRaw = toFinite(inputs.biasPts);
-  const biasPts = mode === "equal_leftover" ? 0 : biasPtsRaw;
-  const partnerAName = inputs.partnerAName?.trim() || i18n.t("parameters.partnerPlaceholder", { label: "A" });
-  const partnerBName = inputs.partnerBName?.trim() || i18n.t("parameters.partnerPlaceholder", { label: "B" });
-
-  const trPctClamped = clamp(trPct, 0, 100) / 100;
-  const effectiveTRA = Math.max(0, a2) * trPctClamped;
-  const effectiveTRB = Math.max(0, b2) * trPctClamped;
-  const effectiveTR = effectiveTRA + effectiveTRB;
-
-  const eligibleTR = Math.max(0, E);
-
-  let usedTRA = effectiveTRA;
-  let usedTRB = effectiveTRB;
-
-  if (advanced) {
-    const cap = Math.min(effectiveTR, eligibleTR);
-    if (effectiveTR > 0 && cap < effectiveTR) {
-      const ratio = cap / effectiveTR;
-      usedTRA = effectiveTRA * ratio;
-      usedTRB = effectiveTRB * ratio;
-    }
-    if (cap === 0) {
-      usedTRA = 0;
-      usedTRB = 0;
-    }
-  }
-
-  const V = advanced ? usedTRA + usedTRB : effectiveTR;
-
-  const potTotal = advanced ? m + eligibleTR : m + V;
-
-  const extraEligibleCash = advanced ? Math.max(0, eligibleTR - V) : 0;
-
-  const cashNeeded = m + extraEligibleCash;
-
-  const cashNeededRounded = r2(cashNeeded);
-  const SA = Math.max(0, a1);
-  const SB = Math.max(0, b);
-
-  let shareD_raw = 0.5;
-  let shareD_biased = 0.5;
-  let shareM_biased = 0.5;
-  let contribEqDRaw = 0;
-  let contribEqMRaw = 0;
-  let depositD = 0;
-  let depositM = 0;
-  let leftoverA = 0;
-  let leftoverB = 0;
-
-  const warnings: string[] = [];
-  const steps: string[] = [];
-
-  const pushCommonSteps = () => {
-    steps.push(
-      i18n.t("calc.steps.effectiveTr", {
-        partnerAName,
-        partnerBName,
-        valueA: r2(effectiveTRA),
-        valueB: r2(effectiveTRB),
-        total: r2(effectiveTR),
-      }),
-    );
-    steps.push(
-      advanced
-        ? i18n.t("calc.steps.usedTrCapped", {
-            partnerAName,
-            partnerBName,
-            valueA: r2(usedTRA),
-            valueB: r2(usedTRB),
-            total: r2(V),
-          })
-        : i18n.t("calc.steps.usedTr", {
-            partnerAName,
-            partnerBName,
-            valueA: r2(effectiveTRA),
-            valueB: r2(effectiveTRB),
-            total: r2(V),
-          }),
-    );
-    steps.push(
-      advanced
-        ? i18n.t("calc.steps.totalPotAdvanced", {
-            m: r2(m),
-            eligible: r2(eligibleTR),
-            total: r2(potTotal),
-          })
-        : i18n.t("calc.steps.totalPot", {
-            m: r2(m),
-            v: r2(V),
-            total: r2(potTotal),
-          }),
-    );
-    const extra = r2(Math.max(0, eligibleTR - V));
-    steps.push(
-      advanced
-        ? i18n.t("calc.steps.cashNeededAdvanced", {
-            m: r2(m),
-            extra,
-            cash: r2(cashNeededRounded),
-          })
-        : i18n.t("calc.steps.cashNeeded", {
-            cash: r2(cashNeededRounded),
-          }),
-    );
-  };
-
-  pushCommonSteps();
-
-  if (mode === "proportional") {
-    const wD = SA + usedTRA;
-    const wM = SB + usedTRB;
-    const denom = wD + wM;
-    shareD_raw = denom > 0 ? wD / denom : 0.5;
-
-    // Biais signé : +X => favorise B (A paie plus), -X => favorise A (A paie moins)
-    const biasShift = clamp(biasPts, -50, 50) / 100;
-    shareD_biased = clamp(shareD_raw + biasShift, 0, 1);
-    shareM_biased = 1 - shareD_biased;
-
-    contribEqDRaw = potTotal * shareD_biased;
-    contribEqMRaw = potTotal - contribEqDRaw;
-
-    let depositDRaw = contribEqDRaw - usedTRA;
-    let depositMRaw = contribEqMRaw - usedTRB;
-
-    if (depositDRaw < 0) {
-      depositMRaw += depositDRaw;
-      depositDRaw = 0;
-    }
-    if (depositMRaw < 0) {
-      depositDRaw += depositMRaw;
-      depositMRaw = 0;
-    }
-
-    depositD = r2(Math.max(0, depositDRaw));
-    depositM = r2(Math.max(0, cashNeededRounded - depositD));
-
-    const sumDeposits = depositD + depositM;
-    if (sumDeposits > cashNeededRounded && Math.abs(sumDeposits - cashNeededRounded) < 0.05) {
-      const diff = r2(sumDeposits - cashNeededRounded);
-      if (diff > 0) {
-        if (depositM >= diff) depositM = r2(depositM - diff);
-        else depositD = r2(Math.max(0, depositD - diff));
-      }
-    }
-
-    // Sécurité borne (arrondis)
-    depositD = r2(depositD);
-    depositM = r2(depositM);
-    if (depositM < 0 && Math.abs(depositM) < 0.02) {
-      depositM = 0;
-      depositD = r2(cashNeededRounded - depositM);
-    }
-    if (depositD < 0 && Math.abs(depositD) < 0.02) {
-      depositD = 0;
-      depositM = r2(cashNeededRounded);
-    }
-
-    leftoverA = r2(SA - depositD);
-    leftoverB = r2(SB - depositM);
-
-    if (denom === 0) {
-      warnings.push(i18n.t("calc.warnings.zeroWeighted"));
-    }
-    if (contribEqDRaw - usedTRA < 0) {
-      warnings.push(i18n.t("calc.warnings.depositBoundedA", { name: partnerAName }));
-    }
-    if (contribEqMRaw - usedTRB < 0) {
-      warnings.push(i18n.t("calc.warnings.depositBoundedB", { name: partnerBName }));
-    }
-
-    const shareA = (shareD_raw * 100).toFixed(1);
-    const shareB = ((1 - shareD_raw) * 100).toFixed(1);
-    const biasedShareA = (shareD_biased * 100).toFixed(1);
-    const biasedShareB = (shareM_biased * 100).toFixed(1);
-    const biasDisplay = `${biasPts >= 0 ? "+" : ""}${biasPts.toFixed(1)}`;
-    const biasDirection =
-      biasPts === 0
-        ? i18n.t("calc.steps.biasDirection.neutral")
-        : biasPts > 0
-          ? i18n.t("calc.steps.biasDirection.favorB", { name: partnerBName })
-          : i18n.t("calc.steps.biasDirection.favorA", { name: partnerAName });
-
-    steps.push(
-      i18n.t("calc.steps.sharesRaw", {
-        partnerAName,
-        partnerBName,
-        shareA,
-        shareB,
-      }),
-    );
-    steps.push(
-      i18n.t("calc.steps.bias", {
-        bias: biasDisplay,
-        direction: biasDirection,
-        partnerAName,
-        partnerBName,
-        shareA: biasedShareA,
-        shareB: biasedShareB,
-      }),
-    );
-    steps.push(
-      i18n.t("calc.steps.contributionEquivalent", {
-        partnerAName,
-        partnerBName,
-        valueA: r2(contribEqDRaw),
-        valueB: r2(contribEqMRaw),
-      }),
-    );
-    steps.push(
-      i18n.t("calc.steps.cashDeposits", {
-        partnerAName,
-        partnerBName,
-        valueA: r2(depositD),
-        valueB: r2(depositM),
-        total: r2(depositD + depositM),
-      }),
-    );
-  } else {
-    let depositDRaw = (cashNeeded + (SA - SB)) / 2;
-    let depositMRaw = cashNeeded - depositDRaw;
-    let boundedA = false;
-    let boundedB = false;
-
-    if (depositDRaw < 0) {
-      depositDRaw = 0;
-      depositMRaw = cashNeeded;
-      boundedA = true;
-    }
-    if (depositMRaw < 0) {
-      depositMRaw = 0;
-      depositDRaw = cashNeeded;
-      boundedB = true;
-    }
-
-    depositD = r2(Math.max(0, depositDRaw));
-    depositM = r2(Math.max(0, cashNeededRounded - depositD));
-
-    if (depositM < 0 && Math.abs(depositM) < 0.02) {
-      depositM = 0;
-      depositD = r2(cashNeededRounded);
-    }
-    if (depositD < 0 && Math.abs(depositD) < 0.02) {
-      depositD = 0;
-      depositM = r2(cashNeededRounded);
-    }
-
-    leftoverA = r2(SA - depositD);
-    leftoverB = r2(SB - depositM);
-
-    contribEqDRaw = depositD + usedTRA;
-    contribEqMRaw = depositM + usedTRB;
-    shareD_raw = potTotal > 0 ? contribEqDRaw / potTotal : 0.5;
-    shareD_raw = clamp(shareD_raw, 0, 1);
-    shareD_biased = shareD_raw;
-    shareM_biased = 1 - shareD_biased;
-
-    if (depositD === 0 && SA < SB) {
-      warnings.push(i18n.t("calc.warnings.equalBoundedA"));
-    }
-    if (depositM === 0 && SB < SA) {
-      warnings.push(i18n.t("calc.warnings.equalBoundedB"));
-    }
-
-    steps.push(i18n.t("calc.steps.equalModeIntro"));
-    steps.push(
-      i18n.t("calc.steps.equalEquation", {
-        sa: r2(SA),
-        sb: r2(SB),
-        partnerAName,
-        partnerBName,
-      }),
-    );
-    steps.push(
-      i18n.t("calc.steps.equalDepositA", {
-        partnerAName,
-        sa: r2(SA),
-        sb: r2(SB),
-        depositA: r2(depositD),
-      }),
-    );
-    steps.push(
-      i18n.t("calc.steps.equalDepositB", {
-        partnerAName,
-        partnerBName,
-        cashNeeded: r2(cashNeededRounded),
-        depositA: r2(depositD),
-        depositB: r2(depositM),
-      }),
-    );
-    if (boundedA) {
-      steps.push(i18n.t("calc.steps.equalBoundedA", { partnerAName }));
-    }
-    if (boundedB) {
-      steps.push(i18n.t("calc.steps.equalBoundedB", { partnerBName }));
-    }
-    steps.push(
-      i18n.t("calc.steps.contributionEqual", {
-        partnerAName,
-        partnerBName,
-        valueA: r2(contribEqDRaw),
-        valueB: r2(contribEqMRaw),
-      }),
-    );
-    steps.push(
-      i18n.t("calc.steps.leftovers", {
-        partnerAName,
-        partnerBName,
-        valueA: r2(leftoverA),
-        valueB: r2(leftoverB),
-      }),
-    );
-    steps.push(
-      i18n.t("calc.steps.cashDeposits", {
-        partnerAName,
-        partnerBName,
-        valueA: r2(depositD),
-        valueB: r2(depositM),
-        total: r2(depositD + depositM),
-      }),
-    );
-  }
-
-  if (advanced && effectiveTR > eligibleTR) {
-    warnings.push(
-      i18n.t("calc.warnings.trNotFullyUsed", { amount: r2(effectiveTR - eligibleTR) })
-    );
+const sanitizeInputs = (inputs: Inputs): Sanitized => {
+  const objective = inputs.objective ?? { type: "max_advantage" as const };
+  let sanitizedObjective: ObjectiveInput = objective;
+  if (objective.type === "donation_target") {
+    sanitizedObjective = { type: "donation_target", amount: Math.max(0, objective.amount ?? 0) };
+  } else if (objective.type === "net_cost_target") {
+    sanitizedObjective = { type: "net_cost_target", cost: Math.max(0, objective.cost ?? 0) };
   }
 
   return {
-    effectiveTRA: r2(effectiveTRA),
-    effectiveTRB: r2(effectiveTRB),
-    effectiveTR: r2(effectiveTR),
-    usedTRA: r2(usedTRA),
-    usedTRB: r2(usedTRB),
-    V: r2(V),
-    potTotal: r2(potTotal),
-    cashNeeded: cashNeededRounded,
-    shareD_raw: r2(shareD_raw),
-    shareD_biased: r2(shareD_biased),
-    shareM_biased: r2(shareM_biased),
-    contribEqD: r2(contribEqDRaw),
-    contribEqM: r2(contribEqMRaw),
-    depositD,
-    depositM,
-    leftoverA,
-    leftoverB,
+    year: Math.round(inputs.year) || getTaxConfig(inputs.year).year,
+    taxableIncome: Math.max(0, inputs.taxableIncome ?? 0),
+    frequency: inputs.frequency === "monthly" ? "monthly" : "once",
+    objective: sanitizedObjective,
+    expertMode: Boolean(inputs.expertMode),
+    trFaceValue: Math.max(0, inputs.trFaceValue ?? 0),
+    trQuantity: Math.max(0, inputs.trQuantity ?? 0),
+    trEmployerRate: clampNumber(inputs.trEmployerRate ?? 0, 0, 100),
+    trEmployeeRate: clampNumber(inputs.trEmployeeRate ?? 0, 0, 100),
+  };
+};
+
+const computeDonationTotal = (
+  inputs: Sanitized,
+  config: TaxConfig,
+  multiplier: number,
+  computeCost: (donation: number) => number,
+): {
+  donation: number;
+  objective: CalculationObjectiveState;
+  warnings: string[];
+} => {
+  const cap20 = inputs.taxableIncome * config.cap20Rate;
+  const warnings: string[] = [];
+  let donation = 0;
+  const objective: CalculationObjectiveState = {
+    type: inputs.objective.type,
+    achieved: true,
+  };
+
+  if (inputs.objective.type === "max_advantage") {
+    donation = cap20;
+  } else if (inputs.objective.type === "donation_target") {
+    donation = inputs.objective.amount * multiplier;
+    objective.targetAnnual = donation;
+    objective.targetPeriodic = inputs.objective.amount;
+  } else if (inputs.objective.type === "net_cost_target") {
+    const target = inputs.objective.cost * multiplier;
+    objective.targetAnnual = target;
+    objective.targetPeriodic = inputs.objective.cost;
+
+    const tolerance = 0.5;
+    const maxIterations = 80;
+    let low = 0;
+    let high = Math.max(cap20 * 2, target * 3 + 1000, 1000);
+
+    const costAt = (donationValue: number) => computeCost(donationValue);
+    let lowCost = costAt(low);
+    let highCost = costAt(high);
+
+    const maxCap = inputs.taxableIncome * 0.5 + target + 1000;
+    let safetyIterations = 0;
+    while (highCost < target && high < maxCap && safetyIterations < 32) {
+      high *= 2;
+      highCost = costAt(high);
+      safetyIterations += 1;
+    }
+
+    if (highCost < target) {
+      objective.achieved = false;
+      objective.maxCostAnnual = highCost;
+      warnings.push("objective_unreachable");
+      donation = high;
+    } else if (lowCost > target) {
+      objective.achieved = false;
+      objective.minCostAnnual = lowCost;
+      warnings.push("objective_unreachable_low");
+      donation = low;
+    } else {
+      for (let i = 0; i < maxIterations; i += 1) {
+        const mid = (low + high) / 2;
+        const midCost = costAt(mid);
+        if (Math.abs(midCost - target) <= tolerance) {
+          donation = mid;
+          break;
+        }
+        if (midCost < target) {
+          low = mid;
+          lowCost = midCost;
+        } else {
+          high = mid;
+        }
+        donation = mid;
+      }
+      donation = Math.max(0, donation);
+    }
+  }
+
+  return { donation, objective, warnings };
+};
+
+type BaseComputation = CalculationDetails & {
+  cap75Usage: number;
+  cap20Usage: number;
+};
+
+const computeBases = (donation: number, config: TaxConfig, taxableIncome: number): BaseComputation => {
+  const cap75 = config.cap75Euros;
+  const cap20 = taxableIncome * config.cap20Rate;
+
+  const base75 = Math.min(cap75, donation);
+  const base66Theoretical = Math.max(0, donation - base75);
+  const baseTotalBefore20 = base75 + base66Theoretical;
+  const baseTotalRetained = Math.min(baseTotalBefore20, cap20);
+  const base66 = Math.max(0, baseTotalRetained - base75);
+  const report = Math.max(0, baseTotalBefore20 - cap20);
+  const reduction = base75 * config.rate75 + base66 * config.rate66;
+
+  const cap75Usage = cap75 === 0 ? 0 : Math.min(1, base75 / cap75);
+  const cap20Usage = cap20 === 0 ? 0 : Math.min(1, baseTotalRetained / cap20);
+
+  return {
+    base75,
+    base66Theoretical,
+    baseTotalBefore20,
+    baseTotalRetained,
+    base66,
+    reduction,
+    report,
+    cap75Usage,
+    cap20Usage,
+  };
+};
+
+export function calculate(inputs: Inputs): Result {
+  const sanitized = sanitizeInputs(inputs);
+  const config = getTaxConfig(sanitized.year);
+  const multiplier = sanitized.frequency === "monthly" ? 12 : 1;
+
+  const rawEmployeeRate = sanitized.trEmployeeRate / 100;
+  const rawEmployerRate = sanitized.trEmployerRate / 100;
+  const ratesSum = rawEmployeeRate + rawEmployerRate;
+  const isSplitValid = Math.abs(ratesSum - 1) < 1e-4;
+  const normEmployeeRate = ratesSum > 0 ? rawEmployeeRate / ratesSum : 0;
+  const normEmployerRate = ratesSum > 0 ? rawEmployerRate / ratesSum : 0;
+
+  const trNominal = sanitized.expertMode
+    ? sanitized.trFaceValue * sanitized.trQuantity * multiplier
+    : 0;
+
+  const donationPreview = (donationValue: number) => {
+    const trUsed = Math.min(trNominal, Math.max(0, donationValue));
+    const cash = Math.max(0, donationValue - trUsed);
+    const employeePart = trUsed * normEmployeeRate;
+    const beforeReduction = cash + employeePart;
+    const bases = computeBases(donationValue, config, sanitized.taxableIncome);
+    const costAfterReduction = beforeReduction - bases.reduction;
+    return costAfterReduction;
+  };
+
+  const { donation, objective, warnings } = computeDonationTotal(
+    sanitized,
+    config,
+    multiplier,
+    donationPreview,
+  );
+
+  const trUsed = Math.min(trNominal, Math.max(0, donation));
+  const cashDonation = Math.max(0, donation - trUsed);
+  const employeePart = trUsed * normEmployeeRate;
+  const employerPart = trUsed * normEmployerRate;
+
+  const bases = computeBases(donation, config, sanitized.taxableIncome);
+
+  const beforeReduction = cashDonation + employeePart;
+  const afterReduction = beforeReduction - bases.reduction;
+  const includingEmployer = sanitized.expertMode
+    ? beforeReduction + employerPart - bases.reduction
+    : undefined;
+
+  const infoMessages: string[] = [];
+  if (bases.report > 0) {
+    infoMessages.push("report");
+  }
+  if (trNominal > 0 && trUsed < trNominal - 1e-6) {
+    infoMessages.push("tr_not_fully_used");
+  }
+
+  if (!isSplitValid && sanitized.expertMode) {
+    warnings.push("tr_split_invalid");
+  }
+  if (bases.baseTotalBefore20 > sanitized.taxableIncome * config.cap20Rate) {
+    warnings.push("cap20_reached");
+  }
+
+  const steps: string[] = [];
+  steps.push(
+    `Base 75% = min(${config.cap75Euros.toFixed(2)}, ${donation.toFixed(2)}) = ${bases.base75.toFixed(2)}`,
+  );
+  steps.push(
+    `Base 66% théorique = max(0, ${donation.toFixed(2)} − ${bases.base75.toFixed(2)}) = ${bases.base66Theoretical.toFixed(2)}`,
+  );
+  steps.push(
+    `Plafond global 20% = ${sanitized.taxableIncome.toFixed(2)} × ${(config.cap20Rate * 100).toFixed(0)}% = ${(sanitized.taxableIncome * config.cap20Rate).toFixed(2)}`,
+  );
+  steps.push(
+    `Base retenue avant 20% = ${bases.base75.toFixed(2)} + ${bases.base66Theoretical.toFixed(2)} = ${bases.baseTotalBefore20.toFixed(2)}`,
+  );
+  steps.push(
+    `Base retenue après 20% = min(${bases.baseTotalBefore20.toFixed(2)}, ${(sanitized.taxableIncome * config.cap20Rate).toFixed(2)}) = ${bases.baseTotalRetained.toFixed(2)}`,
+  );
+  steps.push(
+    `Base 66% finale = max(0, ${bases.baseTotalRetained.toFixed(2)} − ${bases.base75.toFixed(2)}) = ${bases.base66.toFixed(2)}`,
+  );
+  steps.push(
+    `Réduction = ${bases.base75.toFixed(2)} × ${(config.rate75 * 100).toFixed(0)}% + ${bases.base66.toFixed(2)} × ${(config.rate66 * 100).toFixed(0)}% = ${bases.reduction.toFixed(2)}`,
+  );
+
+  const result: Result = {
+    inputs: sanitized,
+    config,
+    multiplier,
+    donation: {
+      total: round2(donation),
+      totalPeriodic: round2(donation / multiplier),
+      cash: round2(cashDonation),
+      trNominal: round2(trNominal),
+      trUsed: round2(trUsed),
+    },
+    tr: {
+      enabled: sanitized.expertMode,
+      faceValue: sanitized.trFaceValue,
+      quantity: sanitized.trQuantity,
+      employeePart: round2(employeePart),
+      employerPart: round2(employerPart),
+      employeeRate: normEmployeeRate,
+      employerRate: normEmployerRate,
+      isSplitValid,
+    },
+    costs: {
+      beforeReduction: round2(beforeReduction),
+      afterReduction: round2(afterReduction),
+      includingEmployer: sanitized.expertMode ? round2(includingEmployer ?? afterReduction) : undefined,
+    },
+    caps: {
+      cap75: config.cap75Euros,
+      cap20: sanitized.taxableIncome * config.cap20Rate,
+      cap75Usage: bases.cap75Usage,
+      cap20Usage: bases.cap20Usage,
+    },
+    details: {
+      base75: round2(bases.base75),
+      base66Theoretical: round2(bases.base66Theoretical),
+      baseTotalBefore20: round2(bases.baseTotalBefore20),
+      baseTotalRetained: round2(bases.baseTotalRetained),
+      base66: round2(bases.base66),
+      reduction: round2(bases.reduction),
+      report: round2(bases.report),
+    },
     warnings,
+    infoMessages,
+    objective,
     steps,
   };
+
+  return result;
 }
+

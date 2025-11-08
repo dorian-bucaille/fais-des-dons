@@ -1,23 +1,25 @@
-/* eslint-env browser */
 import React, { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Result } from "../lib/types";
+import { euro } from "../lib/format";
 import { useCollapse } from "../hooks/useCollapse";
 
 export type DetailsCardHandle = {
   openAndFocus: () => void;
 };
 
-export const DetailsCard = forwardRef<DetailsCardHandle, { r: Result }>(({ r }, ref) => {
+type Props = {
+  result: Result;
+};
+
+export const DetailsCard = forwardRef<DetailsCardHandle, Props>(({ result }, ref) => {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const containerRef = useCollapse(open);
   const rootRef = useRef<HTMLDivElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
-  const handleToggle = () => {
-    setOpen((prev) => !prev);
-  };
+  const toggle = () => setOpen((prev) => !prev);
 
   useImperativeHandle(
     ref,
@@ -26,34 +28,43 @@ export const DetailsCard = forwardRef<DetailsCardHandle, { r: Result }>(({ r }, 
         setOpen(true);
         window.requestAnimationFrame(() => {
           rootRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-          window.setTimeout(() => {
-            headingRef.current?.focus();
-          }, 250);
+          window.setTimeout(() => headingRef.current?.focus(), 250);
         });
       },
     }),
     [],
   );
 
+  const context = {
+    base75: euro(result.details.base75),
+    base66: euro(result.details.base66),
+    donation: euro(result.donation.total),
+    taxable: euro(result.inputs.taxableIncome),
+    cap20: euro(result.caps.cap20),
+    reduction: euro(result.details.reduction),
+    report: euro(result.details.report),
+  };
+
   return (
-    <div ref={rootRef} className="card" id="details-section">
-      <div className="flex items-center justify-between gap-3">
+    <section ref={rootRef} className="card" id="details-section">
+      <header className="flex items-center justify-between gap-3">
         <h2
           ref={headingRef}
           tabIndex={-1}
-          className="text-lg font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
+          className="text-lg font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
         >
           {t("details.title")}
         </h2>
         <button
+          type="button"
           className="no-print btn btn-ghost"
-          onClick={handleToggle}
+          onClick={toggle}
           aria-expanded={open}
           aria-controls="details-panel"
         >
           {open ? t("details.hide") : t("details.show")}
         </button>
-      </div>
+      </header>
 
       <div
         id="details-panel"
@@ -62,29 +73,25 @@ export const DetailsCard = forwardRef<DetailsCardHandle, { r: Result }>(({ r }, 
         style={{ maxHeight: "0px", opacity: 0, transform: "translateY(-0.5rem)" }}
         aria-hidden={!open}
       >
-        <div className="mt-3 space-y-2 text-sm">
-          <ul className="list-disc ml-5">
-            {r.steps.map((s, i) => (
-              <li key={i}>{s}</li>
-            ))}
+        <div className="mt-3 space-y-3 text-sm">
+          <p className="text-gray-600 dark:text-gray-300">{t("details.intro")}</p>
+          <ul className="ml-5 list-disc space-y-2">
+            <li>{t("details.steps.base75", context)}</li>
+            <li>{t("details.steps.base66", context)}</li>
+            <li>{t("details.steps.cap20", context)}</li>
+            <li>{t("details.steps.baseRetained", context)}</li>
+            <li>{t("details.steps.reduction", context)}</li>
+            <li>{t("details.steps.cost", context)}</li>
           </ul>
-          {r.warnings.length > 0 && (
-            <div className="mt-3">
-              <div className="font-semibold">{t("details.warnings")}</div>
-              <ul className="list-disc ml-5 text-amber-600">
-                {r.warnings.map((w, i) => (
-                  <li key={i}>{w}</li>
-                ))}
-              </ul>
+          {result.details.report > 0 ? (
+            <div className="rounded-2xl border border-slate-200/70 bg-slate-50/80 p-3 text-sm text-slate-900 shadow-sm dark:border-slate-600/40 dark:bg-slate-900/30 dark:text-slate-100">
+              {t("details.report", context)}
             </div>
-          )}
-          <p
-            className="mt-3 text-gray-500"
-            dangerouslySetInnerHTML={{ __html: t("details.note") }}
-          />
+          ) : null}
+          <p className="text-gray-500 dark:text-gray-400">{t("details.note")}</p>
         </div>
       </div>
-    </div>
+    </section>
   );
 });
 
