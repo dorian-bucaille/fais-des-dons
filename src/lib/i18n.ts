@@ -1,21 +1,15 @@
 import i18n, { type Resource } from "i18next";
 import { initReactI18next } from "react-i18next";
 
-const STORAGE_KEY = "equilibre-couple:lang";
+const STORAGE_KEY = "fdd:lang";
 const fallbackLng = "fr" as const;
 
 const getInitialLanguage = () => {
-  if (typeof window === "undefined") {
-    return fallbackLng;
-  }
+  if (typeof window === "undefined") return fallbackLng;
   const stored = window.localStorage.getItem(STORAGE_KEY);
-  if (stored) {
-    return stored;
-  }
+  if (stored) return stored;
   const navigatorLang = window.navigator.language?.split("-")[0];
-  if (navigatorLang === "fr" || navigatorLang === "en") {
-    return navigatorLang;
-  }
+  if (navigatorLang === "fr" || navigatorLang === "en") return navigatorLang;
   return fallbackLng;
 };
 
@@ -23,607 +17,356 @@ const resources: Resource = {
   fr: {
     translation: {
       languages: {
-        fr: "Français",
-        en: "English",
+        switch: "FR / EN",
       },
       header: {
-        title: "💞 Équilibre couple — calculateur",
+        title: "🎁 Fais des dons — calculateur fiscal",
         description:
-          "Ajustez vos contributions communes en quelques secondes et visualisez un partage équilibré, clair et apaisant.",
+          "Simulez rapidement l'impact fiscal de vos dons aux associations, en séparant les zones à 75 % et 66 % et en suivant le plafond global de 20 %.",
+        disclaimer: "Calculateur pédagogique — aucune donnée n'est transmise.",
         github: "GitHub",
       },
       actions: {
         copyLink: "Copier le lien",
         copyLinkSuccess: "Lien copié dans le presse-papiers.",
+        copyLinkError: "Impossible de copier automatiquement le lien.",
+        copySummary: "Copier les résultats",
+        copySummarySuccess: "Résumé copié dans le presse-papiers.",
+        copySummaryError: "Impossible de copier le résumé.",
+        exportCsv: "Exporter en CSV",
         print: "Imprimer / PDF",
         reset: "Réinitialiser",
-        confirmLoad: "Charger cet enregistrement va remplacer les valeurs actuelles. Continuer ?",
-        confirmClearFirst: "Supprimer tout l'historique local ?",
-        confirmClearSecond: "Cette action est définitive. Confirmer la suppression ?",
-      },
-      accessibility: {
-        modeProportional: "Mode proportionnel activé",
-        modeEqualLeftover: "Mode reste à vivre égal activé",
-        historyCleared: "Historique effacé",
-        historyLoaded: "Enregistrement du {{date}} chargé",
-        toggleDarkMode: "Basculer mode sombre",
-        info: "Informations complémentaires",
-        languageSwitcher: "Changer de langue",
       },
       parameters: {
         title: "Paramètres",
-        description:
-          "Personnalisez les revenus, les tickets restaurant et le budget commun pour obtenir une proposition sur-mesure.",
-        partnerNameLabel: "Nom partenaire {{label}}",
-        partnerPlaceholder: "Partenaire {{label}}",
-        partnerTooltip:
-          "Personnalise le nom utilisé pour le partenaire {{label}} dans les calculs et graphiques",
-        modeLabel: "Mode de répartition",
-        modeTooltip:
-          "Proportionnel : chacun contribue selon ses moyens. Reste à vivre égal : chacun garde le même reste cash après contribution.",
-        modes: {
-          proportional: {
-            title: "Proportionnel",
-            description: "Chacun contribue selon ses moyens, tickets resto inclus.",
-            announcement: "Mode proportionnel",
+        description: "Saisissez votre revenu imposable, choisissez un objectif et, si besoin, ajoutez vos dons en titres-restaurant.",
+        year: "Année fiscale",
+        income: "Revenu imposable annuel",
+        frequency: {
+          title: "Fréquence",
+          once: "Ponctuel",
+          monthly: "Mensuel",
+        },
+        objectives: {
+          max: {
+            title: "Maximiser l'avantage fiscal",
+            description: "Remplir automatiquement le plafond global de 20 % du revenu imposable.",
           },
-          equal_leftover: {
-            title: "Reste à vivre égal",
-            description: "Alignement du cash restant après contribution pour chaque partenaire.",
-            announcement: "Mode reste à vivre égal",
+          brut: {
+            title: "Je veux donner un montant",
+            description: "Fixez un don brut (cash + TR). Les plafonds sont appliqués automatiquement.",
+            amount: "Montant {{label}}",
+          },
+          net: {
+            title: "Je vise un coût réel",
+            description: "Trouver le don qui aboutit au coût net souhaité après réduction d'impôt.",
+            amount: "Coût recherché {{label}}",
           },
         },
-        salaryLabel: "Salaire {{name}}",
-        ticketsLabel: "Tickets resto {{name}}",
-        sharedBudgetLabel: "Budget commun hors TR",
-        trPctLabel: "% TR effectivement dépensés",
-        eligibleLabel: "Dépenses éligibles TR (E)",
-        codeSuffix: " ({{code}})",
-        trPctTooltip: "Pourcentage des TR réellement consommés",
-        eligibleTooltip:
-          "Montant mensuel des dépenses éligibles (courses/resto) qui peuvent être payées en TR",
-        sharedBudgetTooltip: "Part du budget commun non éligible TR (cash)",
-        salaryTooltip: "Salaire net mensuel de {{name}}",
-        ticketsTooltip: "Montant mensuel brut de tickets restaurant crédités pour {{name}}",
-        advancedToggle: {
-          title: "Mode avancé",
-          description: "Ajouter les dépenses éligibles et ajuster finement la contribution.",
-          helper: "Permet de saisir E = dépenses éligibles TR (au‑delà des TR)",
-        },
-        bias: {
-          label: "Ajustement du prorata (favoriser {{partnerA}} ou {{partnerB}})",
-          summaryNeutral: "Neutre",
-          summaryFavor: "Favorise {{name}} ({{points}} pts)",
-          summaryDetail: "{{points}} points pour {{name}}",
-          helper: "Valeur positive: favorise {{partnerB}} ({{partnerA}} paie davantage). Valeur négative: favorise {{partnerA}} ({{partnerA}} paie moins).",
-          sliderLabel: "Ajustement du prorata ({{partnerA}} ↔ {{partnerB}})",
-          favorA: "Favoriser {{name}}",
-          favorB: "Favoriser {{name}}",
-          neutral: "Neutre",
-          disabled: "Biais non applicable en mode “Reste à vivre égal”.",
-        },
-        suffix: {
-          euroMonth: "€ / mois",
-          percent: "%",
+        expert: {
+          title: "Mode expert",
+          description: "Ajouter des dons en titres-restaurant",
+          enable: "Activer",
+          disable: "Désactiver",
+          faceValue: "Valeur faciale d'un TR",
+          quantity: "Nombre de TR donnés",
+          employerRate: "% part employeur",
+          employeeRate: "% part salarié",
+          helper: "La somme des pourcentages employeur + salarié doit être égale à 100 %. Les montants sont annualisés selon la fréquence.",
         },
       },
       summary: {
-        title: "Résumé",
-        description:
-          "Aperçu instantané de la répartition et du niveau de contribution de chaque partenaire.",
+        title: "Synthèse",
+        description: "Visualisez le don optimal, l'économie d'impôt et le coût réel.",
+        periodic: {
+          once: "ponctuel",
+          monthly: "par mois",
+        },
         labels: {
-          share: "Part {{name}}",
-          deposit: "Dépôt {{name}}",
-          leftover: "Reste {{name}}",
-          totalCash: "Cash total à déposer",
-          usedTr: "TR utilisés (V)",
-          totalPot: "Pot total (M)",
-          warnings: "Avertissements",
+          donationAnnual: "Don total annuel",
+          donationPeriodic: "Don {{label}}",
+          reduction: "Réduction totale",
+          costAfter: "Coût après réduction",
+          base75: "Base 75 %",
+          base66: "Base 66 %",
         },
-        chart: {
-          title: "Répartition des contributions",
-          centerPercent: "Total (%)",
-          centerAmount: "Total (€)",
-          deposit: "Dépôt {{name}}",
-          tr: "TR {{name}}",
+        costBreakdown: {
+          title: "Coût détaillé",
+          before: "Montant payé avant impôt",
+          employeeTR: "Part salarié (TR)",
+          employerTR: "Part employeur (TR)",
+          includingEmployer: "Coût incluant la part employeur",
+          reduction: "Réduction d'impôt",
+          after: "Coût réel pour vous",
         },
-        saveBlock: {
-          title: "Sauvegarder cette configuration",
-          description: "Les enregistrements sont stockés localement sur cet appareil.",
-          addNote: "Ajouter une note",
-          save: "Enregistrer dans l'historique",
+        progress: {
+          cap75: "Plafond 75 % utilisé",
+          cap75Label: "Plafond annuel : {{amount}}",
+          cap20: "Plafond global (20 % du revenu)",
+          cap20Label: "Limite actuelle : {{amount}}",
         },
-      },
-      calculationInfo: {
-        aria: "Comprendre les modèles de calcul",
-        toggle: "Comprendre le calcul",
-        sectionTitle: "Comprendre les deux modèles",
-        objectiveTitle: "🎯 Objectif",
-        objectiveText:
-          "Répartir les dépenses communes en respectant les moyens de chacun pour que l’effort ressenti reste comparable, sans viser un partage strictement 50/50.",
-        modelsTitle: "⚖️ Deux modèles",
-        proportionalTitle: "⚖️ Modèle 1 — Proportionnel aux revenus (avec TR)",
-        proportionalList: [
-          "Calcule les moyens réels : salaires + tickets resto consommés.",
-          "Attribue à chacun une part au prorata de ces moyens.",
-          "Déduit les TR déjà utilisés avant de demander du cash.",
-          "Ajuste le budget commun en incluant la part éligible TR.",
-        ],
-        equalTitle: "⚖️ Modèle 2 — Reste à vivre égal",
-        equalList: [
-          "Fixe un objectif : même reste cash pour A et B après contribution.",
-          "Répartit le dépôt nécessaire pour aligner ces restes.",
-          "Intègre les TR déjà utilisés pour réduire l’effort demandé.",
-          "Compense si l’un devrait contribuer négativement (borne à 0).",
-        ],
-        trTitle: "🍽️ Tickets resto",
-        trText:
-          "Les TR sont comptés comme contribution en nature sur les dépenses éligibles. Seule la part réellement consommée est prise en compte.",
-        biasTitle: "🎚️ Biais",
-        biasText:
-          "L’ajustement du prorata permet de déplacer légèrement la part de A ou B pour répondre à un inconfort ponctuel ou équilibrer des charges personnelles.",
-        limitsTitle: "🧩 Limites",
-        limitsList: [
-          "Adapter le % de TR si tous ne sont pas dépensés pour les dépenses communes.",
-          "Surveiller la part du budget non éligible TR pour évaluer l’effort ressenti.",
-          "Prendre en compte les charges personnelles marquées si elles diffèrent beaucoup.",
-        ],
-        detailsLink: "Voir les formules détaillées",
+        tr: {
+          title: "Titres-restaurant",
+          detail: "{{quantity}} titres à {{face}} chacun, soit {{nominal}} pris en compte dans le calcul.",
+        },
+        warnings: {
+          title: "Points d'attention",
+          objective_unreachable: "Le coût visé dépasse ce que permet votre revenu cette année.",
+          objective_unreachable_low: "Le coût demandé est plus faible que 0 €, il est donc déjà atteint.",
+          tr_split_invalid: "Les pourcentages employeur / salarié ne totalisent pas 100 %. Ils ont été normalisés automatiquement.",
+          cap20_reached: "Le plafond global de 20 % du revenu imposable est atteint : l'excédent part en report.",
+        },
+        info: {
+          title: "À savoir",
+          report: "Le surplus au-dessus de 20 % est reportable sur les 5 prochaines années.",
+          tr_not_fully_used: "Tous les titres-restaurant saisis ne sont pas utilisés dans le don (cible plus faible).",
+        },
+        objectiveNotReached: "Objectif de coût difficile à atteindre (cible : {{target}}). Les plafonds fiscaux limitent le résultat.",
       },
       details: {
         title: "Détails du calcul",
-        show: "Afficher les détails",
-        hide: "Masquer les détails",
-        warnings: "Avertissements",
-        note: "Note: les tickets resto sont comptés comme une <strong>contribution en nature</strong>.",
+        show: "Afficher",
+        hide: "Masquer",
+        intro: "Étapes appliquées à votre don pour déterminer la réduction d'impôt.",
+        steps: {
+          base75: "Base 75 % : min(plafond, don) = {{base75}}",
+          base66: "Base 66 % : reste des dons = {{base66}}",
+          cap20: "Plafond global : 20 % × revenu = {{cap20}}",
+          baseRetained: "Base retenue après plafonds : {{donation}} limité à {{cap20}} = {{base75}} + {{base66}}",
+          reduction: "Réduction : 75 % × base 75 + 66 % × base 66 = {{reduction}}",
+          cost: "Coût net : don − réduction",
+        },
+        report: "Report futur : {{report}} seront imputables sur les 5 prochaines années.",
+        note: "Résultats basés sur les règles fiscales en vigueur pour l'année sélectionnée.",
+      },
+      calculationInfo: {
+        aria: "Comprendre les règles de calcul",
+        toggle: "Comprendre les règles fiscales",
+        sectionTitle: "Comment fonctionne la réduction d'impôt",
+        rulesTitle: "Repères clés",
+        rulesList: [
+          "Les dons aux organismes d'aide aux personnes en difficulté sont déductibles à 75 % jusqu'au plafond annuel.",
+          "Au-delà, les dons éligibles sont déductibles à 66 %, dans la limite de 20 % du revenu imposable.",
+          "L'excédent au-delà des 20 % est reportable sur 5 ans.",
+        ],
+        objectivesTitle: "Objectifs proposés",
+        objectivesText: "Choisissez un mode de calcul pour ajuster votre effort de don.",
+        objectivesList: [
+          "Maximiser l'avantage fiscal remplit automatiquement le plafond global.",
+          "Donner un montant fixe calcule l'économie et le coût réel associés.",
+          "Viser un coût net réalise une recherche numérique pour approcher votre cible.",
+        ],
+        expertTitle: "Mode expert",
+        expertText: "Vous pouvez ajouter des titres-restaurant donnés. Le calcul distingue la part employeur et salarié pour plus de transparence.",
+        expertNote: "Rappel : les titres-restaurant donnés sont évalués en valeur faciale.",
+        reminderTitle: "À retenir",
+        reminderList: [
+          "Le calcul est purement indicatif et ne remplace pas un conseil fiscal personnalisé.",
+          "Les montants sont annualisés si vous choisissez une fréquence mensuelle.",
+          "Aucune donnée n'est envoyée : tout reste dans votre navigateur.",
+        ],
+        detailsLink: "Voir le détail des formules",
+      },
+      context: {
+        title: "Bonus pédagogique",
+        pas: "Le prélèvement à la source ne supprime pas la réduction : elle vient en restitution lors de la déclaration annuelle.",
+        report: "En cas de report, notez les montants pour les déclarations des 5 prochaines années.",
       },
       glossary: {
-        aria: "Glossaire contextuel",
         title: "Glossaire",
+        aria: "Glossaire des termes utilisés",
         terms: [
-          {
-            term: "m",
-            description: "Budget commun à alimenter en cash (dépenses non éligibles aux tickets resto).",
-          },
-          {
-            term: "E",
-            description: "Montant mensuel des dépenses éligibles aux tickets resto qui dépassent les TR disponibles.",
-          },
-          {
-            term: "V",
-            description: "Total des tickets restaurant réellement utilisés dans le calcul (après application du % TR effectifs).",
-          },
-          {
-            term: "TR effectifs",
-            description:
-              "Montant de tickets resto pris en compte après avoir appliqué le pourcentage de TR effectivement dépensés.",
-          },
-          {
-            term: "Pot total (M)",
-            description:
-              "Budget mutualisé utilisé pour répartir les dépenses: cash m + dépenses éligibles (E) ou tickets utilisés (V).",
-          },
-          {
-            term: "Biais",
-            description:
-              "Ajustement manuel du prorata: valeur positive favorise B (A paie plus), valeur négative favorise A (A paie moins).",
-          },
+          { term: "Plafond 75 %", description: "Montant annuel de dons éligibles à la réduction de 75 %." },
+          { term: "Plafond 20 %", description: "Limite globale : la somme des bases 75 % et 66 % ne peut pas dépasser 20 % du revenu imposable." },
+          { term: "Report", description: "Part du don excédant le plafond global, utilisable sur les 5 années suivantes." },
+          { term: "Titres-restaurant", description: "Avantage en nature dont la valeur faciale est partagée entre employeur et salarié." },
         ],
-      },
-      history: {
-        title: "Historique",
-        description: "Jusqu'à 60 enregistrements sont conservés sur cet appareil.",
-        clear: "Tout effacer",
-        noteLabel: "Note",
-        notePlaceholder: "Oct. 2025 – nouveau loyer",
-        searchLabel: "Recherche",
-        searchPlaceholder: "Filtrer par note ou mois",
-        periodLabel: "Période",
-        periodOptions: {
-          all: "Tout",
-          three: "3 derniers mois",
-          six: "6 derniers mois",
-          twelve: "12 derniers mois",
-        },
-        save: "Enregistrer dans l'historique",
-        maxWarning:
-          "Capacité maximale atteinte. Le prochain enregistrement remplacera le plus ancien.",
-        empty: "Aucun enregistrement ne correspond à votre recherche.",
-        listLabel: "Historique des calculs enregistrés",
-        listActions: "Actions pour l'enregistrement du {{label}}",
-        load: "Charger",
-        details: "Détails",
-        delete: "Supprimer",
-        loadAria: "Charger l'enregistrement du {{label}}",
-        detailsAria: "Afficher les détails de l'enregistrement du {{label}}",
-        deleteAria: "Supprimer l'enregistrement du {{label}}",
-        boolYes: "Oui",
-        boolNo: "Non",
-        defaultValue: "(par défaut)",
-        noNote: "(sans note)",
-        depositsSummary:
-          "Dépôts — {{partnerA}}: {{depositA}} / {{partnerB}}: {{depositB}}",
-        cashSummary: "Cash: {{cash}} · TR utilisés: {{usedTr}}",
-        inputs: {
-          a1: "Salaire A",
-          a2: "TR bruts A",
-          b: "Salaire B",
-          b2: "TR bruts B",
-          m: "Budget hors TR",
-          trPct: "% TR dépensés",
-          E: "Dépenses éligibles",
-          biasPts: "Biais (pts)",
-          advanced: "Mode avancé",
-          partnerA: "Nom A",
-          partnerB: "Nom B",
-        },
-      },
-      calc: {
-        warnings: {
-          zeroWeighted: "Somme des revenus pondérés nulle — parts fixées à 50/50 par sécurité.",
-          depositBoundedA: "Le dépôt de {{name}} est borné à 0 (sa part est couverte par les tickets resto).",
-          depositBoundedB: "Le dépôt de {{name}} est borné à 0 (sa part est couverte par les tickets resto).",
-          equalBoundedA: "Dépôt A borné à 0 (reste égalisé).",
-          equalBoundedB: "Dépôt B borné à 0 (reste égalisé).",
-          trNotFullyUsed: "TR non utilisés intégralement: {{amount}} € non consommés (E < TR).",
-        },
-        steps: {
-          effectiveTr:
-            "TR effectifs — {{partnerAName}}: {{valueA}} €, {{partnerBName}}: {{valueB}} € (total {{total}} €)",
-          usedTr:
-            "TR utilisés — {{partnerAName}}: {{valueA}} €, {{partnerBName}}: {{valueB}} € (total {{total}} €)",
-          usedTrCapped:
-            "TR utilisés (après plafond E) — {{partnerAName}}: {{valueA}} €, {{partnerBName}}: {{valueB}} € (total {{total}} €)",
-          totalPot:
-            "Pot total équivalent = m + V = {{m}} + {{v}} = {{total}} €",
-          totalPotAdvanced:
-            "Pot total M = m + E = {{m}} + {{eligible}} = {{total}} €",
-          cashNeeded:
-            "Cash à déposer = m = {{cash}} €",
-          cashNeededAdvanced:
-            "Cash à déposer = m + max(0, E - V) = {{m}} + {{extra}} = {{cash}} €",
-          sharesRaw:
-            "Parts (avant biais): {{partnerAName}}={{shareA}}% / {{partnerBName}}={{shareB}}%",
-          bias:
-            "Biais {{bias}} pts ({{direction}}) => {{partnerAName}}={{shareA}}% / {{partnerBName}}={{shareB}}%",
-          biasDirection: {
-            neutral: "neutre",
-            favorA: "favorise {{name}}",
-            favorB: "favorise {{name}}",
-          },
-          contributionEquivalent:
-            "Contribution équivalente: {{partnerAName}}={{valueA}} €, {{partnerBName}}={{valueB}} €",
-          cashDeposits:
-            "Dépôts cash: {{partnerAName}}={{valueA}} €, {{partnerBName}}={{valueB}} € (somme cash={{total}} €)",
-          equalModeIntro: "Mode reste à vivre égal : chacun conserve le même reste cash.",
-          equalEquation:
-            "Égalité du reste cash: {{sa}} - dépôt {{partnerAName}} = {{sb}} - dépôt {{partnerBName}}",
-          equalDepositA:
-            "Dépôt {{partnerAName}} = (cashNeeded + ({{sa}} - {{sb}})) / 2 = {{depositA}} €",
-          equalDepositB:
-            "Dépôt {{partnerBName}} = cashNeeded - dépôt {{partnerAName}} = {{cashNeeded}} - {{depositA}} = {{depositB}} €",
-          equalBoundedA: "Dépôt {{partnerAName}} borné à 0 pour éviter un dépôt négatif.",
-          equalBoundedB: "Dépôt {{partnerBName}} borné à 0 pour éviter un dépôt négatif.",
-          contributionEqual:
-            "Contribution équivalente (cash + TR): {{partnerAName}}={{valueA}} €, {{partnerBName}}={{valueB}} €",
-          leftovers:
-            "Restes cash égalisés: {{partnerAName}}={{valueA}} €, {{partnerBName}}={{valueB}} €",
-        },
       },
     },
   },
   en: {
     translation: {
       languages: {
-        fr: "French",
-        en: "English",
+        switch: "EN / FR",
       },
       header: {
-        title: "💞 Couple balance — calculator",
+        title: "🎁 Fais des dons — tax helper",
         description:
-          "Adjust your shared contributions in seconds and visualise a balanced, clear and reassuring split.",
+          "Estimate the optimal donation and your tax savings by applying the French 75 % / 66 % rules and the 20 % income cap.",
+        disclaimer: "Educational tool — no data is sent anywhere.",
         github: "GitHub",
       },
       actions: {
         copyLink: "Copy link",
-        copyLinkSuccess: "Link copied to the clipboard.",
+        copyLinkSuccess: "Link copied to clipboard.",
+        copyLinkError: "Unable to copy link automatically.",
+        copySummary: "Copy results",
+        copySummarySuccess: "Summary copied to clipboard.",
+        copySummaryError: "Unable to copy summary.",
+        exportCsv: "Export CSV",
         print: "Print / PDF",
         reset: "Reset",
-        confirmLoad: "Loading this entry will replace the current values. Continue?",
-        confirmClearFirst: "Delete the entire local history?",
-        confirmClearSecond: "This action cannot be undone. Confirm deletion?",
-      },
-      accessibility: {
-        modeProportional: "Proportional mode enabled",
-        modeEqualLeftover: "Equal leftover mode enabled",
-        historyCleared: "History cleared",
-        historyLoaded: "Entry from {{date}} loaded",
-        toggleDarkMode: "Toggle dark mode",
-        info: "More information",
-        languageSwitcher: "Change language",
       },
       parameters: {
         title: "Parameters",
-        description:
-          "Adjust incomes, meal vouchers and the shared budget to obtain a tailored recommendation.",
-        partnerNameLabel: "Partner {{label}} name",
-        partnerPlaceholder: "Partner {{label}}",
-        partnerTooltip: "Customises the name used for partner {{label}} in calculations and charts",
-        modeLabel: "Split mode",
-        modeTooltip:
-          "Proportional: each person contributes based on their means. Equal leftover: both keep the same remaining cash after contributing.",
-        modes: {
-          proportional: {
-            title: "Proportional",
-            description: "Each person contributes according to their means, including meal vouchers.",
-            announcement: "Proportional mode",
+        description: "Enter your taxable income, pick an objective and optionally add meal vouchers.",
+        year: "Tax year",
+        income: "Taxable income",
+        frequency: {
+          title: "Frequency",
+          once: "One-off",
+          monthly: "Monthly",
+        },
+        objectives: {
+          max: {
+            title: "Maximise tax benefit",
+            description: "Automatically fills the 20 % global cap based on your income.",
           },
-          equal_leftover: {
-            title: "Equal leftover",
-            description: "Aligns remaining cash after contributing for each partner.",
-            announcement: "Equal leftover mode",
+          brut: {
+            title: "Donate a given amount",
+            description: "Set a gross donation (cash + vouchers). Caps are applied automatically.",
+            amount: "Amount {{label}}",
+          },
+          net: {
+            title: "Target a net cost",
+            description: "Find the donation that matches the net cost after tax deduction.",
+            amount: "Target cost {{label}}",
           },
         },
-        salaryLabel: "Income {{name}}",
-        ticketsLabel: "Meal vouchers {{name}}",
-        sharedBudgetLabel: "Shared budget excluding vouchers",
-        trPctLabel: "% vouchers actually used",
-        eligibleLabel: "Voucher-eligible expenses (E)",
-        codeSuffix: " ({{code}})",
-        trPctTooltip: "Percentage of vouchers actually spent",
-        eligibleTooltip: "Monthly amount of eligible expenses (groceries/restaurants) that can be paid with vouchers",
-        sharedBudgetTooltip: "Part of the shared budget that cannot be paid with vouchers (cash)",
-        salaryTooltip: "Net monthly income of {{name}}",
-        ticketsTooltip: "Gross monthly amount of vouchers credited for {{name}}",
-        advancedToggle: {
-          title: "Advanced mode",
-          description: "Add eligible expenses and fine-tune the contribution.",
-          helper: "Lets you enter E = voucher-eligible expenses (beyond vouchers)",
-        },
-        bias: {
-          label: "Share adjustment (favour {{partnerA}} or {{partnerB}})",
-          summaryNeutral: "Neutral",
-          summaryFavor: "Favours {{name}} ({{points}} pts)",
-          summaryDetail: "{{points}} points for {{name}}",
-          helper:
-            "Positive values favour {{partnerB}} ({{partnerA}} pays more). Negative values favour {{partnerA}} ({{partnerA}} pays less).",
-          sliderLabel: "Share adjustment ({{partnerA}} ↔ {{partnerB}})",
-          favorA: "Favour {{name}}",
-          favorB: "Favour {{name}}",
-          neutral: "Neutral",
-          disabled: "Bias not available in \"Equal leftover\" mode.",
-        },
-        suffix: {
-          euroMonth: "€/month",
-          percent: "%",
+        expert: {
+          title: "Expert mode",
+          description: "Add meal vouchers",
+          enable: "Enable",
+          disable: "Disable",
+          faceValue: "Voucher face value",
+          quantity: "Number of vouchers",
+          employerRate: "% employer share",
+          employeeRate: "% employee share",
+          helper: "Employer and employee percentages should sum to 100 %. Amounts are annualised using the selected frequency.",
         },
       },
       summary: {
         title: "Summary",
-        description:
-          "Instant overview of the split and each partner's contribution level.",
+        description: "Overview of the optimal donation, tax savings and net cost.",
+        periodic: {
+          once: "one-off",
+          monthly: "per month",
+        },
         labels: {
-          share: "Share {{name}}",
-          deposit: "Deposit {{name}}",
-          leftover: "Leftover {{name}}",
-          totalCash: "Total cash to deposit",
-          usedTr: "Vouchers used (V)",
-          totalPot: "Total pot (M)",
-          warnings: "Warnings",
+          donationAnnual: "Total donation (year)",
+          donationPeriodic: "Donation {{label}}",
+          reduction: "Tax reduction",
+          costAfter: "Net cost",
+          base75: "75 % base",
+          base66: "66 % base",
         },
-        chart: {
-          title: "Contribution breakdown",
-          centerPercent: "Total (%)",
-          centerAmount: "Total (€)",
-          deposit: "Deposit {{name}}",
-          tr: "Voucher {{name}}",
+        costBreakdown: {
+          title: "Cost breakdown",
+          before: "Amount paid before tax",
+          employeeTR: "Employee share (vouchers)",
+          employerTR: "Employer share (vouchers)",
+          includingEmployer: "Cost including employer share",
+          reduction: "Tax reduction",
+          after: "Net cost for you",
         },
-        saveBlock: {
-          title: "Save this configuration",
-          description: "Entries are stored locally on this device.",
-          addNote: "Add a note",
-          save: "Save to history",
+        progress: {
+          cap75: "75 % cap usage",
+          cap75Label: "Annual cap: {{amount}}",
+          cap20: "Global 20 % cap",
+          cap20Label: "Current limit: {{amount}}",
         },
-      },
-      calculationInfo: {
-        aria: "Understand the calculation models",
-        toggle: "Understand the calculation",
-        sectionTitle: "Understand the two models",
-        objectiveTitle: "🎯 Objective",
-        objectiveText:
-          "Split shared expenses according to each person's means so that the perceived effort stays comparable, without forcing a strict 50/50 split.",
-        modelsTitle: "⚖️ Two models",
-        proportionalTitle: "⚖️ Model 1 — Proportional to income (with vouchers)",
-        proportionalList: [
-          "Computes real means: salaries + vouchers actually spent.",
-          "Assigns each a share proportional to those means.",
-          "Subtracts vouchers already used before asking for cash.",
-          "Adjusts the shared budget by including the eligible share of vouchers.",
-        ],
-        equalTitle: "⚖️ Model 2 — Equal leftover",
-        equalList: [
-          "Targets the same remaining cash for A and B after contributing.",
-          "Splits the required deposit to align those leftovers.",
-          "Includes vouchers already used to reduce the cash effort.",
-          "Compensates when one side would contribute negatively (clamped to 0).",
-        ],
-        trTitle: "🍽️ Meal vouchers",
-        trText:
-          "Vouchers count as in-kind contributions on eligible expenses. Only the amount actually spent is included.",
-        biasTitle: "🎚️ Bias",
-        biasText:
-          "The bias slider lets you slightly shift shares to address discomfort or balance personal expenses.",
-        limitsTitle: "🧩 Limits",
-        limitsList: [
-          "Adapt the % of vouchers if not all of them are spent on shared expenses.",
-          "Watch the non-eligible budget share to assess perceived effort.",
-          "Account for personal expenses if they differ greatly.",
-        ],
-        detailsLink: "View detailed formulas",
+        tr: {
+          title: "Meal vouchers",
+          detail: "{{quantity}} vouchers at {{face}} each, i.e. {{nominal}} taken into account.",
+        },
+        warnings: {
+          title: "Warnings",
+          objective_unreachable: "The requested net cost is higher than what the current income allows.",
+          objective_unreachable_low: "Requested cost is below zero and is therefore already reached.",
+          tr_split_invalid: "Employer / employee percentages do not sum to 100 %. Values were normalised.",
+          cap20_reached: "The 20 % global cap is reached: the excess goes to future carry-over.",
+        },
+        info: {
+          title: "Keep in mind",
+          report: "Any amount above the global cap can be carried forward for 5 years.",
+          tr_not_fully_used: "Not all meal vouchers are used because the target donation is lower.",
+        },
+        objectiveNotReached: "Net cost target is difficult to reach (target: {{target}}). Fiscal caps limit the result.",
       },
       details: {
         title: "Calculation details",
-        show: "Show details",
-        hide: "Hide details",
-        warnings: "Warnings",
-        note: "Note: meal vouchers count as an <strong>in-kind contribution</strong>.",
+        show: "Show",
+        hide: "Hide",
+        intro: "Steps applied to your donation to compute the tax reduction.",
+        steps: {
+          base75: "75 % base: min(cap, donation) = {{base75}}",
+          base66: "66 % base: remaining donation = {{base66}}",
+          cap20: "Global cap: 20 % × income = {{cap20}}",
+          baseRetained: "Retained base after caps: {{donation}} limited to {{cap20}} = {{base75}} + {{base66}}",
+          reduction: "Reduction: 75 % × base 75 + 66 % × base 66 = {{reduction}}",
+          cost: "Net cost: donation − reduction",
+        },
+        report: "Carry-over: {{report}} can be used over the next 5 years.",
+        note: "Figures are based on the selected tax year.",
+      },
+      calculationInfo: {
+        aria: "Understand how the calculator works",
+        toggle: "Understand the rules",
+        sectionTitle: "How the tax deduction works",
+        rulesTitle: "Key rules",
+        rulesList: [
+          "Donations to eligible charities benefit from a 75 % deduction up to the annual cap.",
+          "Beyond that, donations are deductible at 66 % within the 20 % income limit.",
+          "Any excess over the 20 % cap can be carried forward for 5 years.",
+        ],
+        objectivesTitle: "Objectives",
+        objectivesText: "Pick a mode to match your donation strategy.",
+        objectivesList: [
+          "Maximise tax benefit fills the global cap automatically.",
+          "Donate a fixed amount computes the related tax savings and net cost.",
+          "Target a net cost runs a numeric search to get close to your target.",
+        ],
+        expertTitle: "Expert mode",
+        expertText: "Add meal vouchers to split the employer and employee contributions.",
+        expertNote: "Meal vouchers are accounted for using their face value.",
+        reminderTitle: "Remember",
+        reminderList: [
+          "This tool is informative only and does not replace personalised advice.",
+          "Amounts are annualised when you pick a monthly frequency.",
+          "Everything stays on your device; nothing is sent to a server.",
+        ],
+        detailsLink: "See formula details",
+      },
+      context: {
+        title: "Extra notes",
+        pas: "Pay-as-you-earn does not cancel the deduction: the refund is applied when you file your tax return.",
+        report: "If you generate a carry-over, keep a note for the next 5 tax returns.",
       },
       glossary: {
-        aria: "Contextual glossary",
         title: "Glossary",
+        aria: "Glossary",
         terms: [
-          {
-            term: "m",
-            description: "Cash to feed the shared budget (expenses not eligible to vouchers).",
-          },
-          {
-            term: "E",
-            description: "Monthly eligible expenses that exceed available vouchers.",
-          },
-          {
-            term: "V",
-            description: "Total vouchers actually used in the calculation (after applying the effective %).",
-          },
-          {
-            term: "Effective vouchers",
-            description:
-              "Voucher amount counted after applying the percentage actually spent.",
-          },
-          {
-            term: "Total pot (M)",
-            description:
-              "Shared pot used to split expenses: cash m + eligible expenses (E) or vouchers used (V).",
-          },
-          {
-            term: "Bias",
-            description:
-              "Manual adjustment of the ratio: positive values favour B (A pays more), negative values favour A (A pays less).",
-          },
+          { term: "75 % cap", description: "Annual amount eligible for the 75 % deduction." },
+          { term: "20 % cap", description: "Global limit: the sum of 75 % and 66 % bases cannot exceed 20 % of income." },
+          { term: "Carry-over", description: "Donation amount above the cap that can be carried over for 5 years." },
+          { term: "Meal vouchers", description: "Benefit in kind shared between employer and employee using the face value." },
         ],
-      },
-      history: {
-        title: "History",
-        description: "Up to 60 entries are stored on this device.",
-        clear: "Clear all",
-        noteLabel: "Note",
-        notePlaceholder: "Oct. 2025 – new rent",
-        searchLabel: "Search",
-        searchPlaceholder: "Filter by note or month",
-        periodLabel: "Period",
-        periodOptions: {
-          all: "All",
-          three: "Last 3 months",
-          six: "Last 6 months",
-          twelve: "Last 12 months",
-        },
-        save: "Save to history",
-        maxWarning:
-          "Maximum capacity reached. The next entry will replace the oldest one.",
-        empty: "No entry matches your search.",
-        listLabel: "History of saved calculations",
-        listActions: "Actions for the entry from {{label}}",
-        load: "Load",
-        details: "Details",
-        delete: "Delete",
-        loadAria: "Load the entry from {{label}}",
-        detailsAria: "Show the entry details from {{label}}",
-        deleteAria: "Delete the entry from {{label}}",
-        boolYes: "Yes",
-        boolNo: "No",
-        defaultValue: "(default)",
-        noNote: "(no note)",
-        depositsSummary:
-          "Deposits — {{partnerA}}: {{depositA}} / {{partnerB}}: {{depositB}}",
-        cashSummary: "Cash: {{cash}} · Vouchers used: {{usedTr}}",
-        inputs: {
-          a1: "Income A",
-          a2: "Vouchers gross A",
-          b: "Income B",
-          b2: "Vouchers gross B",
-          m: "Budget without vouchers",
-          trPct: "% vouchers spent",
-          E: "Eligible expenses",
-          biasPts: "Bias (pts)",
-          advanced: "Advanced mode",
-          partnerA: "Name A",
-          partnerB: "Name B",
-        },
-      },
-      calc: {
-        warnings: {
-          zeroWeighted:
-            "Weighted income sum is zero — shares forced to 50/50 for safety.",
-          depositBoundedA:
-            "Deposit for {{name}} clamped to 0 (their share is covered by vouchers).",
-          depositBoundedB:
-            "Deposit for {{name}} clamped to 0 (their share is covered by vouchers).",
-          equalBoundedA: "Deposit A clamped to 0 (leftover equalised).",
-          equalBoundedB: "Deposit B clamped to 0 (leftover equalised).",
-          trNotFullyUsed: "Vouchers not fully used: {{amount}} € unused (E < vouchers).",
-        },
-        steps: {
-          effectiveTr:
-            "Effective vouchers — {{partnerAName}}: {{valueA}} €, {{partnerBName}}: {{valueB}} € (total {{total}} €)",
-          usedTr:
-            "Vouchers used — {{partnerAName}}: {{valueA}} €, {{partnerBName}}: {{valueB}} € (total {{total}} €)",
-          usedTrCapped:
-            "Vouchers used (after E cap) — {{partnerAName}}: {{valueA}} €, {{partnerBName}}: {{valueB}} € (total {{total}} €)",
-          totalPot:
-            "Equivalent total pot = m + V = {{m}} + {{v}} = {{total}} €",
-          totalPotAdvanced:
-            "Total pot M = m + E = {{m}} + {{eligible}} = {{total}} €",
-          cashNeeded: "Cash to deposit = m = {{cash}} €",
-          cashNeededAdvanced:
-            "Cash to deposit = m + max(0, E - V) = {{m}} + {{extra}} = {{cash}} €",
-          sharesRaw:
-            "Shares (before bias): {{partnerAName}}={{shareA}}% / {{partnerBName}}={{shareB}}%",
-          bias:
-            "Bias {{bias}} pts ({{direction}}) => {{partnerAName}}={{shareA}}% / {{partnerBName}}={{shareB}}%",
-          biasDirection: {
-            neutral: "neutral",
-            favorA: "favours {{name}}",
-            favorB: "favours {{name}}",
-          },
-          contributionEquivalent:
-            "Equivalent contribution: {{partnerAName}}={{valueA}} €, {{partnerBName}}={{valueB}} €",
-          cashDeposits:
-            "Cash deposits: {{partnerAName}}={{valueA}} €, {{partnerBName}}={{valueB}} € (cash total={{total}} €)",
-          equalModeIntro: "Equal leftover mode: both keep the same remaining cash.",
-          equalEquation:
-            "Equal remaining cash: {{sa}} - deposit {{partnerAName}} = {{sb}} - deposit {{partnerBName}}",
-          equalDepositA:
-            "Deposit {{partnerAName}} = (cashNeeded + ({{sa}} - {{sb}})) / 2 = {{depositA}} €",
-          equalDepositB:
-            "Deposit {{partnerBName}} = cashNeeded - deposit {{partnerAName}} = {{cashNeeded}} - {{depositA}} = {{depositB}} €",
-          equalBoundedA: "Deposit {{partnerAName}} clamped to 0 to avoid a negative deposit.",
-          equalBoundedB: "Deposit {{partnerBName}} clamped to 0 to avoid a negative deposit.",
-          contributionEqual:
-            "Equivalent contribution (cash + vouchers): {{partnerAName}}={{valueA}} €, {{partnerBName}}={{valueB}} €",
-          leftovers:
-            "Equalised cash leftovers: {{partnerAName}}={{valueA}} €, {{partnerBName}}={{valueB}} €",
-        },
       },
     },
   },
 };
 
-if (!i18n.isInitialized) {
-  void i18n.use(initReactI18next).init({
-    resources,
-    fallbackLng,
-    lng: getInitialLanguage(),
-    interpolation: {
-      escapeValue: false,
-    },
-    returnObjects: true,
-  });
-}
+i18n.use(initReactI18next).init({
+  resources,
+  lng: getInitialLanguage(),
+  fallbackLng,
+  interpolation: { escapeValue: false },
+});
 
-if (typeof window !== "undefined") {
-  i18n.on("languageChanged", (lng) => {
-    window.localStorage.setItem(STORAGE_KEY, lng);
-  });
-}
+i18n.on("languageChanged", (lng) => {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(STORAGE_KEY, lng);
+});
 
-export { resources };
 export default i18n;
+

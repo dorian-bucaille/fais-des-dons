@@ -1,644 +1,510 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { calculate } from "./lib/calc";
-import type { Inputs, SplitMode } from "./lib/types";
 import { InputField } from "./components/InputField";
 import { SummaryCard } from "./components/SummaryCard";
-import { CalculationInfoCard } from "./components/CalculationInfoCard";
 import { DetailsCard, type DetailsCardHandle } from "./components/DetailsCard";
+import { CalculationInfoCard } from "./components/CalculationInfoCard";
 import { GlossaryButton } from "./components/GlossaryButton";
-import { InfoIcon } from "./components/InfoIcon";
-import { History, type HistoryHandle } from "./components/History";
-import { loadState, saveState, type HistoryItem } from "./lib/storage";
+import { calculate } from "./lib/calc";
+import { loadState, saveState } from "./lib/storage";
+import type { Inputs, ObjectiveInput, ObjectiveType } from "./lib/types";
 import { useCollapse } from "./hooks/useCollapse";
 import "./styles.css";
-import { TextField } from "./components/TextField";
 
 const DEFAULTS: Inputs = {
-  partnerAName: "",
-  partnerBName: "",
-  a1: 2000,
-  a2: 175,
-  b2: 0,
-  trPct: 100,
-  b: 2000,
-  m: 1500,
-  advanced: false,
-  E: 600,
-  biasPts: 0,
-  mode: "proportional",
+  year: 2025,
+  taxableIncome: 0,
+  frequency: "once",
+  objective: { type: "max_advantage" },
+  expertMode: false,
+  trFaceValue: 8.5,
+  trQuantity: 0,
+  trEmployerRate: 60,
+  trEmployeeRate: 40,
 };
 
-function parseQuery(defaults: Inputs): Inputs {
-  const u = new URL(window.location.href);
-  const g = (k: keyof Inputs) => u.searchParams.get(String(k));
-  const num = (v: string | null, d: number) => (v ? Number(v) : d);
-  const modeParam = u.searchParams.get("mode");
-  const mode: SplitMode =
-    modeParam === "equal_leftover"
-      ? "equal_leftover"
-      : modeParam === "proportional"
-        ? "proportional"
-        : defaults.mode;
-  return {
-    partnerAName: (u.searchParams.get("nameA") ?? defaults.partnerAName) || "",
-    partnerBName: (u.searchParams.get("nameB") ?? defaults.partnerBName) || "",
-    a1: num(g("a1"), defaults.a1),
-    a2: num(g("a2"), defaults.a2),
-    b2: num(g("b2"), defaults.b2),
-    trPct: num(g("trPct"), defaults.trPct),
-    b: num(g("b"), defaults.b),
-    m: num(g("m"), defaults.m),
-    advanced: g("advanced") ? g("advanced") === "1" : defaults.advanced,
-    E: num(g("E"), defaults.E),
-    biasPts: num(g("biasPts"), defaults.biasPts),
-    mode,
-  };
-}
+const sanitizeNumber = (value: string | null, fallback: number) => {
+  if (!value) return fallback;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+};
 
-function toQuery(i: Inputs) {
-  const p = new URLSearchParams();
-  p.set("nameA", i.partnerAName);
-  p.set("nameB", i.partnerBName);
-  p.set("a1", String(i.a1));
-  p.set("a2", String(i.a2));
-  p.set("b2", String(i.b2));
-  p.set("trPct", String(i.trPct));
-  p.set("b", String(i.b));
-  p.set("m", String(i.m));
-  p.set("advanced", i.advanced ? "1" : "0");
-  p.set("E", String(i.E));
-  p.set("biasPts", String(i.biasPts));
-  p.set("mode", i.mode);
-  return `${location.origin}${location.pathname}?${p.toString()}`;
-}
+const parseObjectiveParam = (raw: string | null, defaults: Inputs): ObjectiveInput => {
+  if (!raw) return defaults.objective;
+  if (raw === "max") {
+    return { type: "max_advantage" };
+  }
+  if (raw.startsWith("brut:")) {
+    const amount = Number(raw.slice(5));
+    return { type: "donation_target", amount: Number.isFinite(amount) ? amount : 0 };
+  }
+  if (raw.startsWith("net:")) {
+    const cost = Number(raw.slice(4));
+    return { type: "net_cost_target", cost: Number.isFinite(cost) ? cost : 0 };
+  }
+  if (raw.startsWith("cout:")) {
+    const cost = Number(raw.slice(5));
+    return { type: "net_cost_target", cost: Number.isFinite(cost) ? cost : 0 };
+  }
+  return defaults.objective;
+};
+
+const parseTrParam = (raw: string | null, base: Inputs) => {
+  if (!raw) return base;
+  const parts = raw.split(",").map((part) => part.trim()).filter(Boolean);
+  const next = { ...base };
+  for (const part of parts) {
+    if (!part.includes("=")) {
+      next.expertMode = part === "1" || part.toLowerCase() === "true";
+      continue;
+    }
+    const [key, value] = part.split("=");
+    if (!value) continue;
+    const num = Number(value);
+    switch (key) {
+      case "v":
+        if (Number.isFinite(num)) next.trFaceValue = num;
+        break;
+      case "q":
+        if (Number.isFinite(num)) next.trQuantity = num;
+        break;
+      case "er":
+        if (Number.isFinite(num)) next.trEmployerRate = num * 100;
+        break;
+      case "sr":
+        if (Number.isFinite(num)) next.trEmployeeRate = num * 100;
+        break;
+      case "exp":
+        next.expertMode = value === "1" || value.toLowerCase() === "true";
+        break;
+      default:
+        break;
+    }
+  }
+  return next;
+};
+
+const parseQuery = (defaults: Inputs): Inputs => {
+  if (typeof window === "undefined") return defaults;
+  const url = new URL(window.location.href);
+  const params = url.searchParams;
+  let parsed: Inputs = { ...defaults };
+
+  parsed.year = Math.round(sanitizeNumber(params.get("y"), defaults.year));
+  if (!Number.isFinite(parsed.year) || parsed.year <= 0) {
+    parsed.year = defaults.year;
+  }
+
+  parsed.taxableIncome = Math.max(0, sanitizeNumber(params.get("ri"), defaults.taxableIncome));
+
+  const freqParam = params.get("per");
+  if (freqParam === "mensuel") parsed.frequency = "monthly";
+  else if (freqParam === "ponctuel") parsed.frequency = "once";
+
+  parsed.objective = parseObjectiveParam(params.get("o"), parsed);
+
+  parsed = parseTrParam(params.get("tr"), parsed);
+
+  const expertParam = params.get("exp");
+  if (expertParam !== null) {
+    parsed.expertMode = expertParam === "1" || expertParam.toLowerCase() === "true";
+  }
+
+  return parsed;
+};
+
+const toQuery = (inputs: Inputs) => {
+  const params = new URLSearchParams();
+  params.set("y", String(inputs.year));
+  params.set("ri", String(Math.max(0, Math.round(inputs.taxableIncome))));
+  params.set("per", inputs.frequency === "monthly" ? "mensuel" : "ponctuel");
+  let objectiveValue = "max";
+  if (inputs.objective.type === "donation_target") {
+    objectiveValue = `brut:${inputs.objective.amount}`;
+  } else if (inputs.objective.type === "net_cost_target") {
+    objectiveValue = `net:${inputs.objective.cost}`;
+  }
+  params.set("o", objectiveValue);
+  const trParts = [inputs.expertMode ? "1" : "0"];
+  trParts.push(`v=${inputs.trFaceValue}`);
+  trParts.push(`q=${inputs.trQuantity}`);
+  trParts.push(`er=${inputs.trEmployerRate / 100}`);
+  trParts.push(`sr=${inputs.trEmployeeRate / 100}`);
+  params.set("tr", trParts.join(","));
+  params.set("exp", inputs.expertMode ? "1" : "0");
+  return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+};
+
+const formatEuro = (value: number, locale: string) =>
+  new Intl.NumberFormat(locale, { style: "currency", currency: "EUR" }).format(value);
+
+const createSummaryText = (inputs: Inputs, locale: string) => {
+  const result = calculate(inputs);
+  const lines = [
+    `Année fiscale : ${result.config.year}`,
+    `Revenu imposable : ${formatEuro(result.inputs.taxableIncome, locale)}`,
+    `Don total : ${formatEuro(result.donation.total, locale)} (${formatEuro(result.donation.totalPeriodic, locale)} ${
+      result.inputs.frequency === "monthly" ? "/ mois" : "ponctuel"
+    })`,
+    `Réduction d'impôt : ${formatEuro(result.details.reduction, locale)}`,
+    `Coût réel après réduction : ${formatEuro(result.costs.afterReduction, locale)}`,
+    `Base 75 % : ${formatEuro(result.details.base75, locale)}`,
+    `Base 66 % : ${formatEuro(result.details.base66, locale)}`,
+    `Report éventuel : ${formatEuro(result.details.report, locale)}`,
+  ];
+  if (result.tr.enabled) {
+    lines.push(
+      `Titres-restaurant utilisés : ${formatEuro(result.donation.trUsed, locale)} (part salarié ${formatEuro(
+        result.tr.employeePart,
+        locale,
+      )}, part employeur ${formatEuro(result.tr.employerPart, locale)})`,
+    );
+  }
+  return lines.join("\n");
+};
+
+const downloadCsv = (inputs: Inputs, locale: string) => {
+  const result = calculate(inputs);
+  const rows = [
+    ["annee", "revenu", "base75", "base66", "reduction", "cout_reel", "report"],
+    [
+      result.config.year,
+      result.inputs.taxableIncome,
+      result.details.base75,
+      result.details.base66,
+      result.details.reduction,
+      result.costs.afterReduction,
+      result.details.report,
+    ],
+  ];
+  const csv = rows
+    .map((row) =>
+      row
+        .map((cell) => {
+          if (typeof cell === "number") {
+            return new Intl.NumberFormat(locale, { useGrouping: false, maximumFractionDigits: 2 }).format(cell);
+          }
+          return String(cell);
+        })
+        .join(","),
+    )
+    .join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `fais-des-dons-${result.config.year}.csv`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+};
 
 export default function App() {
   const { t, i18n } = useTranslation();
   const locale = i18n.language.startsWith("fr") ? "fr-FR" : "en-GB";
-  const partnerPlaceholderA = t("parameters.partnerPlaceholder", { label: "A" });
-  const partnerPlaceholderB = t("parameters.partnerPlaceholder", { label: "B" });
   const [inputs, setInputs] = useState<Inputs>(() => {
-    const loaded = loadState(DEFAULTS);
-    const merged = parseQuery(loaded);
-    return merged;
+    const stored = loadState(DEFAULTS);
+    return parseQuery(stored);
   });
-  const [lastLoadedInputs, setLastLoadedInputs] = useState<Inputs>(inputs);
-  const [ariaMessage, setAriaMessage] = useState("");
-  const [copyTooltip, setCopyTooltip] = useState<
-    { message: string; tone: "success" | "error" } | null
-  >(null);
-  const copyTooltipTimeout = useRef<ReturnType<typeof setTimeout>>();
-  const historyRef = useRef<HistoryHandle>(null);
-  const titleRef = useRef<HTMLHeadingElement>(null);
+  const [copied, setCopied] = useState<string | null>(null);
   const detailsRef = useRef<DetailsCardHandle>(null);
-  const biasHighlight = useHighlightOnChange(inputs.biasPts);
-  const advancedRef = useCollapse(inputs.advanced);
-  const isDirty = useMemo(
-    () => !areInputsEqual(inputs, lastLoadedInputs),
-    [inputs, lastLoadedInputs],
-  );
-
-  const partnerAName = inputs.partnerAName.trim() || partnerPlaceholderA;
-  const partnerBName = inputs.partnerBName.trim() || partnerPlaceholderB;
-  const biasDisabled = inputs.mode === "equal_leftover";
-  const advancedCollapsed = !inputs.advanced;
-  const suffixEuroMonth = t("parameters.suffix.euroMonth");
-  const suffixPercent = t("parameters.suffix.percent");
-
-  const labelWithCode = (key: string, code: string, name?: string) => {
-    const base = t(key, name ? { name } : undefined);
-    return inputs.advanced ? `${base}${t("parameters.codeSuffix", { code })}` : base;
-  };
-
-  const salaryLabelA = labelWithCode("parameters.salaryLabel", "a1", partnerAName);
-  const salaryLabelB = labelWithCode("parameters.salaryLabel", "b", partnerBName);
-  const ticketsLabelA = labelWithCode("parameters.ticketsLabel", "a2", partnerAName);
-  const ticketsLabelB = labelWithCode("parameters.ticketsLabel", "b2", partnerBName);
-  const sharedBudgetLabel = labelWithCode("parameters.sharedBudgetLabel", "m");
-  const salaryTooltipA = t("parameters.salaryTooltip", { name: partnerAName });
-  const salaryTooltipB = t("parameters.salaryTooltip", { name: partnerBName });
-  const ticketsTooltipA = t("parameters.ticketsTooltip", { name: partnerAName });
-  const ticketsTooltipB = t("parameters.ticketsTooltip", { name: partnerBName });
-  const sharedBudgetTooltip = t("parameters.sharedBudgetTooltip");
+  const expertRef = useCollapse(inputs.expertMode);
 
   useEffect(() => {
     saveState(inputs);
   }, [inputs]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = toQuery(inputs);
+    window.history.replaceState(null, "", url);
+  }, [inputs]);
+
   const result = useMemo(() => calculate(inputs), [inputs]);
 
   useEffect(() => {
-    return () => {
-      if (copyTooltipTimeout.current) {
-        clearTimeout(copyTooltipTimeout.current);
+    if (!copied) return;
+    const timeout = window.setTimeout(() => setCopied(null), 2400);
+    return () => window.clearTimeout(timeout);
+  }, [copied]);
+
+  const handleObjectiveChange = (type: ObjectiveType) => {
+    setInputs((prev) => {
+      if (type === "max_advantage") return { ...prev, objective: { type } };
+      if (type === "donation_target") {
+        const amount = prev.objective.type === "donation_target" ? prev.objective.amount : 100;
+        return { ...prev, objective: { type, amount } };
       }
-    };
-  }, []);
+      const cost = prev.objective.type === "net_cost_target" ? prev.objective.cost : 100;
+      return { ...prev, objective: { type, cost } };
+    });
+  };
 
-  const copyLink = async () => {
-    const url = toQuery(inputs);
+  const handleCopyLink = async () => {
     try {
+      const url = toQuery(inputs);
       await navigator.clipboard.writeText(url);
-      const message = t("actions.copyLinkSuccess");
-      setAriaMessage(message);
-      setCopyTooltip({ message, tone: "success" });
+      setCopied(t("actions.copyLinkSuccess"));
     } catch {
-      const message = "Impossible de copier le lien automatiquement.";
-      setAriaMessage(message);
-      setCopyTooltip({ message, tone: "error" });
+      setCopied(t("actions.copyLinkError"));
     }
+  };
 
-    if (copyTooltipTimeout.current) {
-      clearTimeout(copyTooltipTimeout.current);
+  const handleCopySummary = async () => {
+    try {
+      const summary = createSummaryText(inputs, locale);
+      await navigator.clipboard.writeText(summary);
+      setCopied(t("actions.copySummarySuccess"));
+    } catch {
+      setCopied(t("actions.copySummaryError"));
     }
-
-    copyTooltipTimeout.current = setTimeout(() => {
-      setCopyTooltip(null);
-    }, 2400);
   };
 
-  const reset = () => {
-    const fresh = { ...DEFAULTS };
-    setInputs(fresh);
-    setLastLoadedInputs(fresh);
-  };
+  const handleExportCsv = () => downloadCsv(inputs, locale);
 
-  const printPDF = () => window.print();
-
-  const handleModeChange = (mode: SplitMode) => {
-    setInputs((prev) => ({ ...prev, mode }));
-    setAriaMessage(
-      mode === "equal_leftover"
-        ? t("accessibility.modeEqualLeftover")
-        : t("accessibility.modeProportional"),
-    );
-  };
-
-  const handleSummarySave = () => {
-    historyRef.current?.addCurrentState();
-  };
-
-  const handleSummaryFocusNote = () => {
-    historyRef.current?.focusNote();
-  };
-
-  const handleHistoryCleared = () => {
-    setAriaMessage(t("accessibility.historyCleared"));
-  };
-
-  const handleLoadHistory = (item: HistoryItem) => {
-    if (isDirty) {
-      const confirmed = window.confirm(t("actions.confirmLoad"));
-      if (!confirmed) return;
-    }
-
-    const snapshot = JSON.parse(JSON.stringify(item.inputs)) as Inputs;
-    setInputs(snapshot);
-    setLastLoadedInputs(snapshot);
-
-    const formattedDate = new Date(item.dateISO).toLocaleDateString(locale);
-    setAriaMessage(t("accessibility.historyLoaded", { date: formattedDate }));
-
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    window.setTimeout(() => {
-      titleRef.current?.focus();
-    }, 300);
-  };
+  const reset = () => setInputs({ ...DEFAULTS });
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-slate-100 via-white to-rose-50 transition-colors duration-300 ease-out dark:from-gray-950 dark:via-gray-950 dark:to-slate-900">
-      <div className="pointer-events-none absolute -left-32 top-[-12rem] h-[28rem] w-[28rem] rounded-full bg-rose-300/30 blur-3xl dark:bg-rose-500/20" />
-      <div className="pointer-events-none absolute bottom-[-14rem] right-[-24rem] h-[32rem] w-[32rem] rounded-full bg-sky-300/25 blur-3xl dark:bg-sky-500/20" />
-
-      <div className="relative z-10 mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
-        <header className="rounded-3xl border border-white/70 bg-white/80 px-6 py-6 shadow-xl backdrop-blur-md transition-colors duration-300 ease-out dark:border-white/10 dark:bg-gray-900/60">
-          <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
-            <div className="space-y-2 text-center md:text-left">
-              <h1
-                className="text-3xl font-semibold tracking-tight text-gray-900 dark:text-gray-50"
-                ref={titleRef}
-                tabIndex={-1}
-              >
-                {t("header.title")}
-              </h1>
-              <p className="text-sm text-gray-600 dark:text-gray-300">{t("header.description")}</p>
-            </div>
-            <div className="no-print flex flex-col items-center gap-3 md:items-end">
-              <div className="flex items-center gap-2">
-                <LanguageSwitcher />
-                <ThemeToggle />
-                {inputs.advanced && <GlossaryButton />}
+    <div className="pb-12">
+      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
+        <header className="flex flex-col gap-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-2">
+              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{t("header.title")}</h1>
+              <p className="max-w-2xl text-sm text-gray-600 dark:text-gray-300">{t("header.description")}</p>
+              <div className="flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
+                <span>{t("header.disclaimer")}</span>
               </div>
-              <div className="flex flex-wrap justify-center gap-2 md:justify-end">
-                <a
-                  href="https://github.com/dorian-bucaille/equilibre-couple"
-                  className="btn btn-ghost"
-                  target="_blank"
-                  rel="noreferrer"
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => i18n.changeLanguage(i18n.language.startsWith("fr") ? "en" : "fr")}
+              >
+                {t("languages.switch")}
+              </button>
+              <GlossaryButton />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-3 text-sm text-gray-500 dark:text-gray-400">
+            <button type="button" className="btn btn-primary no-print" onClick={handleCopyLink}>
+              {t("actions.copyLink")}
+            </button>
+            <button type="button" className="btn btn-ghost no-print" onClick={handleCopySummary}>
+              {t("actions.copySummary")}
+            </button>
+            <button type="button" className="btn btn-ghost no-print" onClick={handleExportCsv}>
+              {t("actions.exportCsv")}
+            </button>
+            <button type="button" className="btn btn-ghost no-print" onClick={() => window.print()}>
+              {t("actions.print")}
+            </button>
+            <button type="button" className="btn btn-ghost no-print" onClick={reset}>
+              {t("actions.reset")}
+            </button>
+          </div>
+          {copied ? <div className="text-sm font-medium text-emerald-600 dark:text-emerald-300">{copied}</div> : null}
+        </header>
+
+        <section className="card space-y-6" id="parameters">
+          <header className="space-y-1">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t("parameters.title")}</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">{t("parameters.description")}</p>
+          </header>
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <InputField
+              id="year"
+              label={t("parameters.year")}
+              value={inputs.year}
+              onChange={(value) => setInputs((prev) => ({ ...prev, year: Math.round(value) || prev.year }))}
+              min={2005}
+              max={2100}
+            />
+            <InputField
+              id="income"
+              label={t("parameters.income")}
+              value={inputs.taxableIncome}
+              onChange={(value) => setInputs((prev) => ({ ...prev, taxableIncome: Math.max(0, value) }))}
+              min={0}
+              step={100}
+              suffix="€"
+            />
+            <div className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{t("parameters.frequency.title")}</span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className={`btn btn-ghost flex-1 ${inputs.frequency === "once" ? "ring-2 ring-rose-400/60" : ""}`}
+                  onClick={() => setInputs((prev) => ({ ...prev, frequency: "once" }))}
                 >
-                  {t("header.github")}
-                </a>
-                <div className="relative">
-                  <button onClick={copyLink} className="btn btn-ghost">
-                    {t("actions.copyLink")}
-                  </button>
-                  {copyTooltip ? (
-                    <div className="pointer-events-none absolute inset-x-0 top-full mt-2 flex justify-center">
-                      <span
-                        role="status"
-                        className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-medium shadow-lg ring-1 ring-black/5 ${copyTooltip.tone === "success" ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"}`}
-                      >
-                        {copyTooltip.message}
-                      </span>
-                    </div>
-                  ) : null}
-                </div>
-                <button onClick={printPDF} className="btn btn-ghost">
-                  {t("actions.print")}
+                  {t("parameters.frequency.once")}
                 </button>
-                <button onClick={reset} className="btn btn-danger">
-                  {t("actions.reset")}
+                <button
+                  type="button"
+                  className={`btn btn-ghost flex-1 ${inputs.frequency === "monthly" ? "ring-2 ring-rose-400/60" : ""}`}
+                  onClick={() => setInputs((prev) => ({ ...prev, frequency: "monthly" }))}
+                >
+                  {t("parameters.frequency.monthly")}
                 </button>
               </div>
             </div>
           </div>
-        </header>
 
-        <div aria-live="polite" className="sr-only">
-          {ariaMessage}
-        </div>
-
-        <div className="mt-10 flex flex-col gap-10">
-          <section className="card space-y-6">
-            <div className="space-y-1">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t("parameters.title")}</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">{t("parameters.description")}</p>
-            </div>
-
-            <div className="grid gap-6 sm:grid-cols-2">
-              <TextField
-                id="partnerAName"
-                label={t("parameters.partnerNameLabel", { label: "A" })}
-                value={inputs.partnerAName}
-                onChange={(value) => setInputs({ ...inputs, partnerAName: value })}
-                placeholder={partnerPlaceholderA}
-                tooltip={t("parameters.partnerTooltip", { label: "A" })}
-              />
-              <TextField
-                id="partnerBName"
-                label={t("parameters.partnerNameLabel", { label: "B" })}
-                value={inputs.partnerBName}
-                onChange={(value) => setInputs({ ...inputs, partnerBName: value })}
-                placeholder={partnerPlaceholderB}
-                tooltip={t("parameters.partnerTooltip", { label: "B" })}
-              />
-              <fieldset className="space-y-3 sm:col-span-2" aria-describedby="mode-tip">
-                <legend className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
-                  <span>{t("parameters.modeLabel")}</span>
-                  <InfoIcon title={t("parameters.modeTooltip")} tooltipId="mode-tip" />
-                </legend>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="mode-option">
-                    <input
-                      type="radio"
-                      name="mode"
-                      value="proportional"
-                      checked={inputs.mode === "proportional"}
-                      onChange={() => handleModeChange("proportional")}
-                      className="mode-option__input"
-                    />
-                    <div className="mode-option__content">
-                      <span className="mode-option__title">{t("parameters.modes.proportional.title")}</span>
-                      <span className="mode-option__description">
-                        {t("parameters.modes.proportional.description")}
-                      </span>
-                    </div>
-                  </label>
-                  <label className="mode-option">
-                    <input
-                      type="radio"
-                      name="mode"
-                      value="equal_leftover"
-                      checked={inputs.mode === "equal_leftover"}
-                      onChange={() => handleModeChange("equal_leftover")}
-                      className="mode-option__input"
-                    />
-                    <div className="mode-option__content">
-                      <span className="mode-option__title">{t("parameters.modes.equal_leftover.title")}</span>
-                      <span className="mode-option__description">
-                        {t("parameters.modes.equal_leftover.description")}
-                      </span>
-                    </div>
-                  </label>
-                </div>
-              </fieldset>
-              <InputField
-                id="a1"
-                label={salaryLabelA}
-                value={inputs.a1}
-                onChange={(v) => setInputs({ ...inputs, a1: v })}
-                suffix={suffixEuroMonth}
-                tooltip={salaryTooltipA}
-              />
-              <InputField
-                id="b"
-                label={salaryLabelB}
-                value={inputs.b}
-                onChange={(v) => setInputs({ ...inputs, b: v })}
-                suffix={suffixEuroMonth}
-                tooltip={salaryTooltipB}
-              />
-              <InputField
-                id="a2"
-                label={ticketsLabelA}
-                value={inputs.a2}
-                onChange={(v) => setInputs({ ...inputs, a2: v })}
-                suffix={suffixEuroMonth}
-                tooltip={ticketsTooltipA}
-              />
-              <InputField
-                id="b2"
-                label={ticketsLabelB}
-                value={inputs.b2}
-                onChange={(v) => setInputs({ ...inputs, b2: v })}
-                suffix={suffixEuroMonth}
-                tooltip={ticketsTooltipB}
-              />
-              <InputField
-                id="m"
-                label={sharedBudgetLabel}
-                value={inputs.m}
-                onChange={(v) => setInputs({ ...inputs, m: v })}
-                suffix={suffixEuroMonth}
-                tooltip={sharedBudgetTooltip}
-              />
-              <div className="sm:col-span-2">
-                <div className="rounded-3xl border border-dashed border-rose-200/80 bg-white/70 p-4 shadow-sm transition-colors duration-300 ease-out dark:border-rose-500/40 dark:bg-gray-900/40">
-                  <button
-                    type="button"
-                    className={`flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-all duration-200 ease-out ${
-                      inputs.advanced
-                        ? "bg-rose-500/10 text-rose-700 dark:text-rose-200"
-                        : "bg-white/60 text-gray-700 hover:bg-white dark:bg-gray-900/40 dark:text-gray-200 dark:hover:bg-gray-900/60"
-                    }`}
-                    onClick={() => setInputs({ ...inputs, advanced: !inputs.advanced })}
-                    aria-expanded={inputs.advanced}
-                    aria-controls="advanced-panel"
-                  >
-                    <div className="flex flex-col gap-1 text-left">
-                      <span className="text-sm font-semibold">{t("parameters.advancedToggle.title")}</span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {t("parameters.advancedToggle.description")}
-                      </span>
-                    </div>
-                    <span
-                      className={`text-lg transition-transform duration-300 ease-out ${
-                        inputs.advanced ? "rotate-180" : "rotate-0"
-                      }`}
-                      aria-hidden="true"
-                    >
-                      ▾
-                    </span>
-                  </button>
-                  <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">{t("parameters.advancedToggle.helper")}</p>
-                  <div
-                    id="advanced-panel"
-                    ref={advancedRef}
-                    className="overflow-hidden transition-[max-height,opacity,transform] duration-300 ease-out"
-                    style={{ maxHeight: "0px", opacity: 0, transform: "translateY(-0.5rem)" }}
-                    aria-hidden={advancedCollapsed}
-                  >
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-3 lg:grid-cols-3">
+            {([
+              {
+                type: "max_advantage" as ObjectiveType,
+                title: t("parameters.objectives.max.title"),
+                description: t("parameters.objectives.max.description"),
+              },
+              {
+                type: "donation_target" as ObjectiveType,
+                title: t("parameters.objectives.brut.title"),
+                description: t("parameters.objectives.brut.description"),
+              },
+              {
+                type: "net_cost_target" as ObjectiveType,
+                title: t("parameters.objectives.net.title"),
+                description: t("parameters.objectives.net.description"),
+              },
+            ] satisfies Array<{ type: ObjectiveType; title: string; description: string }>).map((option) => (
+              <label key={option.type} className="mode-option">
+                <input
+                  type="radio"
+                  name="objective"
+                  className="mode-option__input"
+                  checked={inputs.objective.type === option.type}
+                  onChange={() => handleObjectiveChange(option.type)}
+                />
+                <div className="mode-option__content">
+                  <span className="mode-option__title">{option.title}</span>
+                  <span className="mode-option__description">{option.description}</span>
+                  {option.type === "donation_target" && inputs.objective.type === "donation_target" ? (
+                    <div className="mt-2">
                       <InputField
-                        id="trPct"
-                        label={t("parameters.trPctLabel")}
-                        value={inputs.trPct}
-                        onChange={(v) => setInputs({ ...inputs, trPct: v })}
-                        suffix={suffixPercent}
+                        id="donation-amount"
+                        label={t("parameters.objectives.brut.amount", {
+                          label: inputs.frequency === "monthly" ? t("parameters.frequency.monthly") : t("parameters.frequency.once"),
+                        })}
+                        value={inputs.objective.amount}
+                        onChange={(value) =>
+                          setInputs((prev) => ({
+                            ...prev,
+                            objective: { type: "donation_target", amount: Math.max(0, value) },
+                          }))
+                        }
                         min={0}
-                        max={100}
-                        step={1}
-                        tooltip={t("parameters.trPctTooltip")}
-                        disabled={advancedCollapsed}
+                        suffix="€"
                       />
-                      <InputField
-                        id="E"
-                        label={t("parameters.eligibleLabel")}
-                        value={inputs.E}
-                        onChange={(v) => setInputs({ ...inputs, E: v })}
-                        suffix={suffixEuroMonth}
-                        tooltip={t("parameters.eligibleTooltip")}
-                        disabled={advancedCollapsed}
-                      />
-                      <label className="flex flex-col gap-4 rounded-2xl border border-gray-200/80 bg-white/70 p-4 shadow-sm transition-colors duration-300 ease-out dark:border-gray-700/60 dark:bg-gray-900/40 sm:col-span-2">
-                        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                          <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">
-                            {t("parameters.bias.label", { partnerA: partnerAName, partnerB: partnerBName })}
-                          </span>
-                          <div className="flex flex-col items-start gap-1 text-xs font-medium text-gray-500 sm:items-end sm:text-right dark:text-gray-400">
-                            <span
-                              className={`transition-all duration-200 ease-out ${
-                                biasHighlight
-                                  ? "-translate-y-0.5 text-rose-600 opacity-100 dark:text-rose-300"
-                                  : "translate-y-0 text-gray-500 opacity-80 dark:text-gray-400"
-                              }`}
-                            >
-                              {formatBiasSummary(inputs.biasPts, partnerAName, partnerBName, t)}
-                            </span>
-                            <span
-                              className={`transition-all duration-200 ease-out ${
-                                biasHighlight
-                                  ? "text-rose-600 opacity-100 dark:text-rose-300"
-                                  : "text-gray-500 opacity-80 dark:text-gray-400"
-                              }`}
-                            >
-                              {formatBiasForPartner(inputs.biasPts, partnerAName, t)}
-                            </span>
-                          </div>
-                        </div>
-                        <input
-                          type="range"
-                          min={-10}
-                          max={10}
-                          step={0.5}
-                          value={inputs.biasPts}
-                          onChange={(e) =>
-                            setInputs({ ...inputs, biasPts: parseFloat(e.target.value) })
-                          }
-                          aria-label={t("parameters.bias.sliderLabel", { partnerA: partnerAName, partnerB: partnerBName })}
-                          className={`w-full accent-rose-500 transition-transform duration-200 ease-out ${
-                            biasHighlight ? "scale-[1.01]" : "scale-100"
-                          }`}
-                          disabled={advancedCollapsed || biasDisabled}
-                        />
-                        <div className="flex justify-between text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                          <span>{t("parameters.bias.favorA", { name: partnerAName })}</span>
-                          <span>{t("parameters.bias.neutral")}</span>
-                          <span>{t("parameters.bias.favorB", { name: partnerBName })}</span>
-                        </div>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {t("parameters.bias.helper", { partnerA: partnerAName, partnerB: partnerBName })}
-                        </span>
-                        {biasDisabled && (
-                          <span className="field-help text-amber-600 dark:text-amber-400">
-                            {t("parameters.bias.disabled")}
-                          </span>
-                        )}
-                      </label>
                     </div>
-                  </div>
+                  ) : null}
+                  {option.type === "net_cost_target" && inputs.objective.type === "net_cost_target" ? (
+                    <div className="mt-2">
+                      <InputField
+                        id="net-cost"
+                        label={t("parameters.objectives.net.amount", {
+                          label: inputs.frequency === "monthly" ? t("parameters.frequency.monthly") : t("parameters.frequency.once"),
+                        })}
+                        value={inputs.objective.cost}
+                        onChange={(value) =>
+                          setInputs((prev) => ({
+                            ...prev,
+                            objective: { type: "net_cost_target", cost: Math.max(0, value) },
+                          }))
+                        }
+                        min={0}
+                        suffix="€"
+                      />
+                    </div>
+                  ) : null}
                 </div>
+              </label>
+            ))}
+          </div>
+
+          <div className="rounded-2xl border border-indigo-200/70 bg-indigo-50/70 p-4 shadow-sm dark:border-indigo-500/40 dark:bg-indigo-500/10">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-indigo-800 dark:text-indigo-200">{t("parameters.expert.title")}</h3>
+                <p className="text-xs text-indigo-900/70 dark:text-indigo-100/80">{t("parameters.expert.description")}</p>
               </div>
+              <button
+                type="button"
+                className={`btn btn-ghost ${inputs.expertMode ? "ring-2 ring-indigo-500/60" : ""}`}
+                onClick={() => setInputs((prev) => ({ ...prev, expertMode: !prev.expertMode }))}
+                aria-expanded={inputs.expertMode}
+              >
+                {inputs.expertMode ? t("parameters.expert.disable") : t("parameters.expert.enable")}
+              </button>
             </div>
-          </section>
-
-          <SummaryCard
-            r={result}
-            partnerAName={partnerAName}
-            partnerBName={partnerBName}
-            mode={inputs.mode}
-            onSaveHistory={handleSummarySave}
-            onFocusNote={handleSummaryFocusNote}
-          />
-          <CalculationInfoCard
-            onRequestDetails={() => {
-              detailsRef.current?.openAndFocus();
-            }}
-          />
-          <DetailsCard ref={detailsRef} r={result} />
-
-          {result.warnings.length > 0 && (
-            <div className="rounded-3xl border border-amber-500/30 bg-amber-50/80 p-5 text-sm text-amber-800 shadow-sm dark:border-amber-400/40 dark:bg-amber-900/30 dark:text-amber-200">
-              <ul className="ml-4 list-disc space-y-1">
-                {result.warnings.map((w, i) => (
-                  <li key={i}>{w}</li>
-                ))}
-              </ul>
+            <div
+              ref={expertRef}
+              className="mt-4 grid gap-3 overflow-hidden text-sm"
+              style={{ maxHeight: "0px", opacity: 0, transform: "translateY(-0.5rem)" }}
+            >
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <InputField
+                  id="tr-face"
+                  label={t("parameters.expert.faceValue")}
+                  value={inputs.trFaceValue}
+                  onChange={(value) => setInputs((prev) => ({ ...prev, trFaceValue: Math.max(0, value) }))}
+                  min={0}
+                  step={0.1}
+                  suffix="€"
+                />
+                <InputField
+                  id="tr-quantity"
+                  label={t("parameters.expert.quantity")}
+                  value={inputs.trQuantity}
+                  onChange={(value) => setInputs((prev) => ({ ...prev, trQuantity: Math.max(0, value) }))}
+                  min={0}
+                  step={1}
+                />
+                <InputField
+                  id="tr-employer"
+                  label={t("parameters.expert.employerRate")}
+                  value={inputs.trEmployerRate}
+                  onChange={(value) => setInputs((prev) => ({ ...prev, trEmployerRate: Math.max(0, value) }))}
+                  min={0}
+                  max={100}
+                  step={1}
+                  suffix="%"
+                />
+                <InputField
+                  id="tr-employee"
+                  label={t("parameters.expert.employeeRate")}
+                  value={inputs.trEmployeeRate}
+                  onChange={(value) => setInputs((prev) => ({ ...prev, trEmployeeRate: Math.max(0, value) }))}
+                  min={0}
+                  max={100}
+                  step={1}
+                  suffix="%"
+                />
+              </div>
+              <p className="text-xs text-indigo-900/70 dark:text-indigo-100/80">
+                {t("parameters.expert.helper")}
+              </p>
             </div>
-          )}
+          </div>
+        </section>
 
-          <History
-            ref={historyRef}
-            inputs={inputs}
-            result={result}
-            onLoad={handleLoadHistory}
-            onRequestClearAll={handleHistoryCleared}
-          />
+        <div className="grid gap-6 lg:grid-cols-[2fr,1fr]">
+          <SummaryCard result={result} />
+          <div className="flex flex-col gap-6">
+            <CalculationInfoCard onRequestDetails={() => detailsRef.current?.openAndFocus()} />
+            <section className="card space-y-3 text-sm text-gray-600 dark:text-gray-300">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t("context.title")}</h2>
+              <p>{t("context.pas")}</p>
+              <p>{t("context.report")}</p>
+            </section>
+          </div>
         </div>
+
+        <DetailsCard ref={detailsRef} result={result} />
       </div>
     </div>
   );
 }
 
-function areInputsEqual(a: Inputs, b: Inputs) {
-  const keys: (keyof Inputs)[] = [
-    "partnerAName",
-    "partnerBName",
-    "a1",
-    "a2",
-    "b2",
-    "trPct",
-    "b",
-    "m",
-    "advanced",
-    "E",
-    "biasPts",
-    "mode",
-  ];
-
-  return keys.every((key) => a[key] === b[key]);
-}
-
-function ThemeToggle() {
-  const { t } = useTranslation();
-  const [dark, setDark] = useState(
-    () => window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches,
-  );
-
-  useEffect(() => {
-    const root = document.documentElement;
-    if (dark) root.classList.add("dark");
-    else root.classList.remove("dark");
-  }, [dark]);
-
-  return (
-    <button
-      className="btn btn-ghost transition-transform duration-300 ease-out hover:scale-105 active:scale-95"
-      onClick={() => setDark((d) => !d)}
-      aria-pressed={dark}
-      aria-label={t("accessibility.toggleDarkMode")}
-    >
-      {dark ? "🌙" : "☀️"}
-    </button>
-  );
-}
-
-function LanguageSwitcher() {
-  const { t, i18n } = useTranslation();
-  const current = i18n.language.startsWith("fr") ? "fr" : "en";
-
-  return (
-    <div className="relative">
-      <label htmlFor="language-select" className="sr-only">
-        {t("accessibility.languageSwitcher")}
-      </label>
-      <select
-        id="language-select"
-        className="input w-28 cursor-pointer appearance-none pr-8 text-sm"
-        value={current}
-        onChange={(event) => {
-          const next = event.target.value;
-          void i18n.changeLanguage(next);
-        }}
-      >
-        <option value="fr">{t("languages.fr")}</option>
-        <option value="en">{t("languages.en")}</option>
-      </select>
-      <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-gray-500">▾</span>
-    </div>
-  );
-}
-
-function useHighlightOnChange(value: number, duration = 250) {
-  const [highlight, setHighlight] = useState(false);
-  const firstRender = useRef(true);
-
-  useEffect(() => {
-    if (firstRender.current) {
-      firstRender.current = false;
-      return;
-    }
-
-    setHighlight(true);
-    const timeout = window.setTimeout(() => setHighlight(false), duration);
-    return () => window.clearTimeout(timeout);
-  }, [value, duration]);
-
-  return highlight;
-}
-
-function formatBiasSummary(
-  value: number,
-  partnerAName: string,
-  partnerBName: string,
-  t: TFunction,
-) {
-  const normalized = Math.abs(value) < 1e-6 ? 0 : value;
-  if (normalized === 0) return t("parameters.bias.summaryNeutral");
-  const points = `${normalized > 0 ? "+" : ""}${normalized.toFixed(1)}`;
-  if (normalized > 0) {
-    return t("parameters.bias.summaryFavor", { name: partnerBName, points });
-  }
-  return t("parameters.bias.summaryFavor", { name: partnerAName, points });
-}
-
-function formatBiasForPartner(value: number, partnerName: string, t: TFunction) {
-  const normalized = Math.abs(value) < 1e-6 ? 0 : value;
-  const sign = normalized > 0 ? "+" : normalized < 0 ? "" : "+";
-  return t("parameters.bias.summaryDetail", {
-    name: partnerName,
-    points: `${sign}${normalized.toFixed(1)}`,
-  });
-}

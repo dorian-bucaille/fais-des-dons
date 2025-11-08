@@ -1,269 +1,193 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { euro, pct } from "../lib/format";
-import type { Result, SplitMode } from "../lib/types";
+import type { Result } from "../lib/types";
 
-type Segment = {
-  label: string;
-  amount: number;
-  color: string;
+type Props = {
+  result: Result;
 };
 
-type DisplayMode = "amount" | "percent";
+const Stat: React.FC<{ label: string; value: string; accent?: boolean }> = ({
+  label,
+  value,
+  accent = false,
+}) => (
+  <div
+    className={`flex flex-col gap-1 rounded-2xl border p-4 text-center shadow-sm transition-colors duration-300 ease-out ${
+      accent
+        ? "border-emerald-200/80 bg-emerald-50/80 dark:border-emerald-500/40 dark:bg-emerald-500/10"
+        : "border-gray-200/80 bg-white/70 dark:border-gray-700/60 dark:bg-gray-900/40"
+    }`}
+  >
+    <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+      {label}
+    </span>
+    <span
+      className={`text-xl font-semibold ${
+        accent ? "text-emerald-700 dark:text-emerald-300" : "text-gray-900 dark:text-gray-100"
+      }`}
+    >
+      {value}
+    </span>
+  </div>
+);
 
-const Chart: React.FC<{
-  title: string;
-  centerLabel: string;
-  displayMode: DisplayMode;
-  segments: Segment[];
-  actions?: React.ReactNode;
-}> = ({ title, centerLabel, displayMode, segments, actions }) => {
-  const total = segments.reduce((acc, cur) => acc + cur.amount, 0);
-  const hasValues = total > 0;
-  let cumulative = 0;
-  const gradient = hasValues
-    ? segments
-        .map((segment) => {
-          const start = cumulative;
-          const delta = total === 0 ? 0 : (segment.amount / total) * 100;
-          cumulative += delta;
-          return `${segment.color} ${start}% ${cumulative}%`;
-        })
-        .join(", ")
-    : "var(--chart-empty) 0% 100%";
-
-  const formatValue = (segment: Segment) => {
-    if (displayMode === "percent") {
-      const ratio = hasValues ? segment.amount / total : 0;
-      return pct(ratio);
-    }
-    return euro(segment.amount);
-  };
-
-  const centerValue = displayMode === "percent"
-    ? pct(hasValues ? 1 : 0)
-    : euro(total);
-
+const Progress: React.FC<{ label: string; ratio: number; capLabel: string }> = ({
+  label,
+  ratio,
+  capLabel,
+}) => {
+  const clamped = Math.max(0, Math.min(1, Number.isFinite(ratio) ? ratio : 0));
   return (
-    <div className="flex flex-col gap-6 rounded-2xl border border-gray-200/80 bg-white/70 p-5 text-sm shadow-sm transition-colors duration-300 ease-out dark:border-gray-700/60 dark:bg-gray-900/40">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">
-          {title}
-        </h3>
-        {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between text-xs font-medium text-gray-600 dark:text-gray-300">
+        <span>{label}</span>
+        <span>{pct(clamped)}</span>
       </div>
-      <div className="flex flex-col items-center gap-6 sm:flex-row sm:justify-center sm:gap-10">
+      <div className="h-2 w-full rounded-full bg-gray-200/80 dark:bg-gray-800/80">
         <div
-          className="relative h-36 w-36"
-          role="img"
-          aria-label={`${title}: ${segments
-            .map((segment) => `${segment.label} ${formatValue(segment)}`)
-            .join(", ")}`}
-        >
-          <div
-            className="h-full w-full rounded-full"
-            style={{
-              background: `conic-gradient(${gradient})`,
-            }}
-          />
-          <div className="absolute inset-7 flex flex-col items-center justify-center rounded-full bg-white/90 text-center leading-tight backdrop-blur-sm dark:bg-slate-950/80">
-            <span className="text-[11px] font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-              {centerLabel}
-            </span>
-            <span className="mt-1 text-lg font-semibold text-gray-900 dark:text-gray-100">
-              {centerValue}
-            </span>
-          </div>
-        </div>
-        <div className="flex w-full flex-col gap-2 text-sm sm:w-48">
-          {segments.map((segment) => (
-            <div key={segment.label} className="flex items-center justify-between gap-3 rounded-xl bg-white/60 px-3 py-2 shadow-inner dark:bg-gray-900/60">
-              <span className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-                <span
-                  className="inline-block h-2.5 w-2.5 rounded-full"
-                  style={{ backgroundColor: segment.color }}
-                />
-                {segment.label}
-              </span>
-              <span className="font-semibold text-gray-900 dark:text-gray-100">
-                {formatValue(segment)}
-              </span>
-            </div>
-          ))}
-        </div>
+          className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-emerald-500"
+          style={{ width: `${clamped * 100}%` }}
+          aria-hidden="true"
+        />
       </div>
+      <span className="text-xs text-gray-500 dark:text-gray-400">{capLabel}</span>
     </div>
   );
 };
 
-const SummaryStat: React.FC<{
-  label: string;
-  value: string;
-  emphasis?: "normal" | "large";
-  tone?: "default" | "alert";
-}> = ({ label, value, emphasis = "normal", tone = "default" }) => {
-  const labelClasses =
-    tone === "alert"
-      ? "text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-200"
-      : "text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400";
-  const valueClasses =
-    emphasis === "large"
-      ? tone === "alert"
-        ? "text-2xl font-semibold text-amber-600 dark:text-amber-200"
-        : "text-2xl font-semibold text-gray-900 dark:text-gray-100"
-      : tone === "alert"
-        ? "text-lg font-semibold text-amber-600 dark:text-amber-200"
-        : "text-lg font-semibold text-gray-900 dark:text-gray-100";
-  const containerClasses =
-    tone === "alert"
-      ? "border-amber-200/80 bg-amber-50/80 shadow-sm dark:border-amber-400/50 dark:bg-amber-500/10"
-      : "border-gray-200/80 bg-white/70 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/40";
-
-  return (
-    <div className={`flex flex-col items-center justify-center rounded-2xl border p-4 text-center transition-colors duration-200 ease-out ${containerClasses}`}>
-      <span className={labelClasses}>{label}</span>
-      <span className={`mt-2 ${valueClasses}`}>{value}</span>
-    </div>
-  );
-};
-
-export const SummaryCard: React.FC<{
-  r: Result;
-  partnerAName: string;
-  partnerBName: string;
-  mode: SplitMode;
-  onSaveHistory?: () => void;
-  onFocusNote?: () => void;
-}> = ({ r, partnerAName, partnerBName, mode, onSaveHistory, onFocusNote }) => {
+export const SummaryCard: React.FC<Props> = ({ result }) => {
   const { t } = useTranslation();
-  const [displayMode, setDisplayMode] = React.useState<DisplayMode>("percent");
-  const isEqualLeftover = mode === "equal_leftover";
-  const modeAnnouncement = isEqualLeftover
-    ? t("parameters.modes.equal_leftover.announcement")
-    : t("parameters.modes.proportional.announcement");
+  const frequencyKey = result.inputs.frequency === "monthly" ? "monthly" : "once";
+  const periodicLabel = t(`summary.periodic.${frequencyKey}`);
 
-  const contributionSegments: Segment[] = [
-    {
-      label: t("summary.chart.deposit", { name: partnerAName }),
-      amount: Math.max(r.depositD, 0),
-      color: "var(--chart-a-deposit)",
-    },
-    {
-      label: t("summary.chart.tr", { name: partnerAName }),
-      amount: Math.max(r.usedTRA, 0),
-      color: "var(--chart-a-tr)",
-    },
-    {
-      label: t("summary.chart.deposit", { name: partnerBName }),
-      amount: Math.max(r.depositM, 0),
-      color: "var(--chart-b-deposit)",
-    },
-    {
-      label: t("summary.chart.tr", { name: partnerBName }),
-      amount: Math.max(r.usedTRB, 0),
-      color: "var(--chart-b-tr)",
-    },
-  ];
+  const infoMessages = result.infoMessages.map((code) => t(`summary.info.${code}`));
+  const warningMessages = result.warnings.map((code) => t(`summary.warnings.${code}`));
 
-  const warningsCount = r.warnings.length;
+  const objectiveMessage = result.objective.achieved
+    ? null
+    : t("summary.objectiveNotReached", {
+        target: result.objective.targetAnnual ? euro(result.objective.targetAnnual) : undefined,
+      });
 
   return (
-    <div className="card space-y-6">
-      <div className="space-y-1">
+    <section className="card space-y-6" id="summary-section">
+      <header className="space-y-1">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t("summary.title")}</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400">{t("summary.description")}</p>
-      </div>
-      <div aria-live="polite" className="sr-only">
-        {modeAnnouncement}
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <SummaryStat
-          label={t("summary.labels.share", { name: partnerAName })}
-          value={pct(r.shareD_biased)}
-          emphasis="large"
-        />
-        <SummaryStat
-          label={t("summary.labels.share", { name: partnerBName })}
-          value={pct(r.shareM_biased)}
-          emphasis="large"
-        />
-        <SummaryStat label={t("summary.labels.deposit", { name: partnerAName })} value={euro(r.depositD)} />
-        <SummaryStat label={t("summary.labels.deposit", { name: partnerBName })} value={euro(r.depositM)} />
-      </div>
-      {isEqualLeftover && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <SummaryStat label={t("summary.labels.leftover", { name: partnerAName })} value={euro(r.leftoverA)} />
-          <SummaryStat label={t("summary.labels.leftover", { name: partnerBName })} value={euro(r.leftoverB)} />
-        </div>
-      )}
-
-      <div className="h-px w-full bg-gradient-to-r from-transparent via-gray-200 to-transparent dark:via-gray-700" />
+      </header>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <SummaryStat label={t("summary.labels.totalCash")} value={euro(r.cashNeeded)} />
-        <SummaryStat label={t("summary.labels.usedTr")} value={euro(r.V)} />
-        <SummaryStat label={t("summary.labels.totalPot")} value={euro(r.potTotal)} />
-        <SummaryStat
-          label={t("summary.labels.warnings")}
-          value={String(warningsCount)}
-          tone={warningsCount > 0 ? "alert" : "default"}
+        <Stat
+          label={t("summary.labels.donationAnnual")}
+          value={`${euro(result.donation.total)}`}
+          accent
         />
+        <Stat label={t("summary.labels.donationPeriodic", { label: periodicLabel })} value={euro(result.donation.totalPeriodic)} />
+        <Stat label={t("summary.labels.reduction") } value={euro(result.details.reduction)} />
+        <Stat label={t("summary.labels.costAfter") } value={euro(result.costs.afterReduction)} />
       </div>
 
-      <Chart
-        title={t("summary.chart.title")}
-        centerLabel={displayMode === "percent" ? t("summary.chart.centerPercent") : t("summary.chart.centerAmount")}
-        displayMode={displayMode}
-        segments={contributionSegments}
-        actions={
-          <div className="inline-flex rounded-full border border-rose-100 bg-white/70 p-0.5 text-xs font-semibold shadow-inner dark:border-rose-500/40 dark:bg-gray-900/60">
-            <button
-              type="button"
-              className={`rounded-full px-3 py-1.5 transition-all duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/60 ${
-                displayMode === "amount"
-                  ? "bg-rose-500 text-white shadow-sm dark:bg-rose-400"
-                  : "text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100"
-              }`}
-              onClick={() => setDisplayMode("amount")}
-              aria-pressed={displayMode === "amount"}
-            >
-              €
-            </button>
-            <button
-              type="button"
-              className={`rounded-full px-3 py-1.5 transition-all duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/60 ${
-                displayMode === "percent"
-                  ? "bg-rose-500 text-white shadow-sm dark:bg-rose-400"
-                  : "text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100"
-              }`}
-              onClick={() => setDisplayMode("percent")}
-              aria-pressed={displayMode === "percent"}
-            >
-              %
-            </button>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="space-y-3 lg:col-span-2">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Stat label={t("summary.labels.base75") } value={euro(result.details.base75)} />
+            <Stat label={t("summary.labels.base66") } value={euro(result.details.base66)} />
           </div>
-        }
-      />
-      {(onSaveHistory || onFocusNote) && (
-        <div className="no-print flex flex-col gap-3 rounded-2xl border border-gray-200/80 bg-white/70 p-4 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/40 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-200">{t("summary.saveBlock.title")}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">{t("summary.saveBlock.description")}</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {onFocusNote && (
-              <button type="button" className="btn btn-ghost" onClick={onFocusNote}>
-                {t("summary.saveBlock.addNote")}
-              </button>
-            )}
-            {onSaveHistory && (
-              <button type="button" className="btn btn-primary" onClick={onSaveHistory}>
-                {t("summary.saveBlock.save")}
-              </button>
-            )}
+          <div className="rounded-2xl border border-gray-200/80 bg-white/70 p-4 shadow-sm dark:border-gray-700/60 dark:bg-gray-900/40">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              {t("summary.costBreakdown.title")}
+            </h3>
+            <dl className="mt-3 space-y-2 text-sm">
+              <div className="flex justify-between gap-4">
+                <dt className="text-gray-600 dark:text-gray-300">{t("summary.costBreakdown.before")}</dt>
+                <dd className="font-semibold text-gray-900 dark:text-gray-100">{euro(result.costs.beforeReduction)}</dd>
+              </div>
+              {result.tr.enabled ? (
+                <>
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-gray-600 dark:text-gray-300">{t("summary.costBreakdown.employeeTR")}</dt>
+                    <dd className="font-semibold text-gray-900 dark:text-gray-100">{euro(result.tr.employeePart)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-gray-600 dark:text-gray-300">{t("summary.costBreakdown.employerTR")}</dt>
+                    <dd className="font-semibold text-gray-900 dark:text-gray-100">{euro(result.tr.employerPart)}</dd>
+                  </div>
+                  {typeof result.costs.includingEmployer === "number" ? (
+                    <div className="flex justify-between gap-4 text-sm font-semibold text-amber-700 dark:text-amber-200">
+                      <dt>{t("summary.costBreakdown.includingEmployer")}</dt>
+                      <dd>{euro(result.costs.includingEmployer)}</dd>
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+              <div className="flex justify-between gap-4">
+                <dt className="text-gray-600 dark:text-gray-300">{t("summary.costBreakdown.reduction")}</dt>
+                <dd className="font-semibold text-gray-900 dark:text-gray-100">− {euro(result.details.reduction)}</dd>
+              </div>
+              <div className="flex justify-between gap-4 text-base font-semibold text-emerald-700 dark:text-emerald-300">
+                <dt>{t("summary.costBreakdown.after")}</dt>
+                <dd>{euro(result.costs.afterReduction)}</dd>
+              </div>
+            </dl>
           </div>
         </div>
-      )}
-    </div>
+
+        <div className="space-y-4">
+          <Progress
+            label={t("summary.progress.cap75")}
+            ratio={result.caps.cap75Usage}
+            capLabel={t("summary.progress.cap75Label", { amount: euro(result.caps.cap75) })}
+          />
+          <Progress
+            label={t("summary.progress.cap20")}
+            ratio={result.caps.cap20Usage}
+            capLabel={t("summary.progress.cap20Label", { amount: euro(result.caps.cap20) })}
+          />
+        </div>
+      </div>
+
+      {result.tr.enabled ? (
+        <div className="rounded-2xl border border-indigo-200/70 bg-indigo-50/80 p-4 text-sm text-indigo-900 shadow-sm dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-100">
+          <h3 className="text-xs font-semibold uppercase tracking-wide">{t("summary.tr.title")}</h3>
+          <p className="mt-2 text-sm">
+            {t("summary.tr.detail", {
+              nominal: euro(result.donation.trUsed),
+              face: euro(result.tr.faceValue),
+              quantity: result.tr.quantity,
+            })}
+          </p>
+        </div>
+      ) : null}
+
+      {warningMessages.length > 0 ? (
+        <div className="rounded-2xl border border-amber-200/70 bg-amber-50/80 p-4 text-sm text-amber-900 shadow-sm dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
+          <h3 className="text-xs font-semibold uppercase tracking-wide">{t("summary.warnings.title")}</h3>
+          <ul className="mt-2 space-y-1">
+            {warningMessages.map((message, index) => (
+              <li key={index}>• {message}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {infoMessages.length > 0 ? (
+        <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4 text-sm text-slate-900 shadow-sm dark:border-slate-600/50 dark:bg-slate-900/40 dark:text-slate-200">
+          <h3 className="text-xs font-semibold uppercase tracking-wide">{t("summary.info.title")}</h3>
+          <ul className="mt-2 space-y-1">
+            {infoMessages.map((message, index) => (
+              <li key={index}>• {message}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {objectiveMessage ? (
+        <div className="rounded-2xl border border-rose-200/80 bg-rose-50/80 p-4 text-sm text-rose-900 shadow-sm dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-100">
+          {objectiveMessage}
+        </div>
+      ) : null}
+    </section>
   );
 };
+
