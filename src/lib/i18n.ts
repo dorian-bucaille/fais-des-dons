@@ -22,7 +22,11 @@ const resources: Resource = {
       header: {
         title: "🎁 Fais des dons — calculateur fiscal",
         description:
-          "Simulez rapidement l'impact fiscal de vos dons aux associations, en séparant les zones à 75 % et 66 % et en suivant le plafond global de 20 %.",
+          "Personnalisez vos objectifs de dons, la fréquence et le mode expert pour affiner la simulation fiscale.",
+        simpleDescription:
+          "Indiquez simplement votre revenu imposable et découvrez immédiatement combien donner pour profiter des réductions d'impôt.",
+        simpleMode: "Mode simple",
+        advancedMode: "Mode expert",
         disclaimer: "Calculateur pédagogique — aucune donnée n'est transmise.",
         github: "GitHub",
       },
@@ -42,6 +46,44 @@ const resources: Resource = {
         exportCsv: "Exporter en CSV",
         print: "Imprimer / PDF",
         reset: "Réinitialiser",
+      },
+      simple: {
+        title: "Ta simulation express",
+        description:
+          "Entre ton revenu imposable pour voir immédiatement combien donner et ce que ça coûtera vraiment après réduction d'impôt.",
+        incomeLabel: "Ton revenu imposable annuel",
+        incomeHelper: "Il apparaît sur ton avis d'imposition, rubrique \"revenu imposable\".",
+        emptyState:
+          "Saisis ton revenu imposable pour découvrir des idées de dons et l'économie d'impôt associée.",
+        cards: {
+          monthly: {
+            title: "Si tu donnes chaque mois",
+            amount: "{{amount}} / mois",
+            detail: "Soit {{annual}} par an.",
+            subAmount: "≈ {{amount}} / mois récupérés",
+            realCostPerMonth: "Coût réel : {{amount}} / mois",
+            explanation:
+              "Tu verses {{donationMonthly}} par mois ({{donation}} par an). L'État te rend {{reductionMonthly}} par mois, soit {{reduction}} sur l'année. Au final, ton don ne te coûte que {{costMonthly}} par mois ({{cost}} sur l'année).",
+          },
+          once: {
+            title: "Si tu donnes en une fois",
+            detail: "Un don ponctuel de {{amount}}.",
+            explanation:
+              "Tu donnes {{donation}} en une fois. L'État te rend {{reduction}} sur tes impôts, donc il ne sort réellement que {{cost}} de ta poche.",
+          },
+          associationReceives: "Les associations reçoivent",
+          taxReduction: "Réduction d'impôt estimée",
+          realCost: "Ce que ça te coûte vraiment",
+          reductionRate: "Pris en charge par l'État",
+        },
+        caps: {
+          title: "Tes plafonds fiscaux",
+          line75: "Réduction à 75 % jusqu'à {{amount}}",
+          line20: "Réduction à 66 % dans la limite de {{amount}} (20 % de ton revenu)",
+        },
+        advancedCta:
+          "Envie d'ajuster la fréquence, un objectif précis ou des titres-restaurant ? Passe en mode expert.",
+        switchAdvanced: "Ouvrir le mode expert",
       },
       parameters: {
         title: "Paramètres",
@@ -198,7 +240,11 @@ const resources: Resource = {
       header: {
         title: "🎁 Fais des dons — tax helper",
         description:
-          "Estimate the optimal donation and your tax savings by applying the French 75 % / 66 % rules and the 20 % income cap.",
+          "Fine-tune donations with detailed objectives, frequencies and the expert mode for advanced simulations.",
+        simpleDescription:
+          "Enter your taxable income and instantly visualise donation ideas alongside the tax reduction.",
+        simpleMode: "Simple mode",
+        advancedMode: "Expert mode",
         disclaimer: "Educational tool — no data is sent anywhere.",
         github: "GitHub",
       },
@@ -218,6 +264,44 @@ const resources: Resource = {
         exportCsv: "Export CSV",
         print: "Print / PDF",
         reset: "Reset",
+      },
+      simple: {
+        title: "Your quick simulation",
+        description:
+          "Enter your taxable income to instantly see how much to give and what it really costs after the tax break.",
+        incomeLabel: "Your annual taxable income",
+        incomeHelper: "You will find it on your French tax notice under “revenu imposable”.",
+        emptyState:
+          "Fill in your taxable income to discover donation ideas and the matching tax reduction.",
+        cards: {
+          monthly: {
+            title: "If you donate every month",
+            amount: "{{amount}} / month",
+            detail: "Which is {{annual}} per year.",
+            subAmount: "≈ {{amount}} returned each month",
+            realCostPerMonth: "Real cost: {{amount}} / month",
+            explanation:
+              "You give {{donationMonthly}} per month ({{donation}} per year). The State gives you back {{reductionMonthly}} per month, i.e. {{reduction}} per year. In the end it really costs {{costMonthly}} per month ({{cost}} per year).",
+          },
+          once: {
+            title: "If you donate once",
+            detail: "A one-off donation of {{amount}}.",
+            explanation:
+              "You donate {{donation}} in one go. The State gives you back {{reduction}}, so the real cost is only {{cost}}.",
+          },
+          associationReceives: "Charities receive",
+          taxReduction: "Estimated tax reduction",
+          realCost: "What it really costs you",
+          reductionRate: "Covered by the State",
+        },
+        caps: {
+          title: "Your tax ceilings",
+          line75: "75% rate up to {{amount}}",
+          line20: "66% rate within {{amount}} (20% of your income)",
+        },
+        advancedCta:
+          "Need another objective, a different frequency or meal vouchers? Switch to expert mode.",
+        switchAdvanced: "Open expert mode",
       },
       parameters: {
         title: "Parameters",
